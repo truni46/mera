@@ -1,19 +1,19 @@
 # Mera
 
-Mera is a modern chatbot application with a modular Python backend and React frontend.
+Mera is an advanced knowledge base mining project that enables intelligent Question & Answering (Q&A) on both user-uploaded documents and the enterprise's central data repository. 
 
 ## System Interface
 
-![Mera Interface](docs/interface.png)
+![Mera Q&A and Citations](docs/feature1.png)
+![Mera Document Digitization](docs/feature2.png)
+![Mera Agent Workflow](docs/feature3.png)
 
 ## Key Features
 
-- Modular Architecture - Domain-driven backend design
-- Real-time Communication - Supports both SSE Streaming and WebSocket
-- LLM Integration - Support for Ollama, OpenAI, Gemini, vLLM via provider pattern
-- Persistence - PostgreSQL with JSON fallback
-- Project Management - Organize chats into projects with document context (RAG)
-- MCP Support - Extensible via Model Context Protocol
+- **Long-term and short-term memory**: By exploiting both short-term and long-term memory, Mera helps retain user context for longer periods and remembers important information, ultimately saving users valuable time.
+- **Agents**: Provides a robust set of agents to support automated workflows, including planner, searching, implement, and testing agents.
+- **Document digitization**: Automatically converts uploaded images and various file formats into digital documents to facilitate easy and accurate Q&A.
+- **Specific citations**: The information utilized by the chatbot to answer user queries includes explicit citations, clearly indicating the exact page and section of the source document for easy cross-referencing and verification.
 
 ## Quick Start
 
@@ -54,11 +54,6 @@ DB_PORT=5432
 DB_NAME=mera
 DB_USER=mera
 DB_PASSWORD=your_password
-
-# LLM Config
-LLM_PROVIDER=ollama
-LLM_MODEL=mistral
-OLLAMA_BASE_URL=http://localhost:11434/v1
 ```
 
 Frontend (.env):
@@ -69,34 +64,15 @@ VITE_SOCKET_URL=http://localhost:3000
 
 ### Running the Application
 
-Terminal 1: Backend
+**Terminal 1: Backend**
 ```bash
 cd server
 python main.py
 ```
-Server runs on http://localhost:3000
 
-Terminal 2: Frontend
+**Terminal 2: Frontend**
 ```bash
 npm run dev
-```
-Frontend runs on http://localhost:5173
-
-## Project Structure
-
-```
-mera/
-├── server/
-│   ├── modules/              # Feature modules
-│   ├── common/               # Shared utilities
-│   ├── config/               # Configuration
-│   ├── testing/              # Verification scripts
-│   ├── api_router.py         # Main router
-│   └── main.py               # Entry point
-├── src/                      # React Frontend
-├── data/                     # Data storage (JSON/Uploads)
-├── docs/                     # Documentation and images
-└── README.md
 ```
 
 If you find this project useful, please consider giving it a star!
