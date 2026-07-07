@@ -1,118 +1,102 @@
-# AI Tutor 🧠
+# Mera
 
-AI Tutor là một ứng dụng chatbot hiện đại, giàu tính năng, được xây dựng với kiến trúc module hóa: backend sử dụng Python (FastAPI/Flask) và frontend sử dụng React.
+Mera is a modern chatbot application with a modular Python backend and React frontend.
 
-![Version](https://img.shields.io/badge/version-1.1.0-green)
-![License](https://img.shields.io/badge/license-ISC-blue)
+## System Interface
 
-## 🎨 Giao diện hệ thống
+![Mera Interface](docs/interface.png)
 
-Dưới đây là hình ảnh minh họa về giao diện chính của hệ thống AI Tutor:
+## Key Features
 
-![AI Tutor Interface](docs/interface.png)
+- Modular Architecture - Domain-driven backend design
+- Real-time Communication - Supports both SSE Streaming and WebSocket
+- LLM Integration - Support for Ollama, OpenAI, Gemini, vLLM via provider pattern
+- Persistence - PostgreSQL with JSON fallback
+- Project Management - Organize chats into projects with document context (RAG)
+- MCP Support - Extensible via Model Context Protocol
 
-## ✨ Các chức năng chính
+## Quick Start
 
-- 🧠 **Kiến trúc Module hóa** - Thiết kế backend theo domain-driven (bao gồm 'auth', 'chat', 'llm', v.v.).
-- 🔄 **Giao tiếp Real-time** - Hỗ trợ cả **SSE Streaming** và **WebSocket** cho trải nghiệm chat mượt mà.
-- 🤖 **Tích hợp LLM đa dạng** - Hỗ trợ nhiều nhà cung cấp LLM như Ollama, OpenAI, Gemini, vLLM thông qua mẫu thiết kế provider.
-- 💾 **Lưu trữ dữ liệu** - Sử dụng PostgreSQL với cơ chế dự phòng (fallback) bằng JSON (lưu tại thư mục `/data`).
-- 📂 **Quản lý dự án** - Tổ chức các cuộc hội thoại thành các dự án cùng với ngữ cảnh từ tài liệu (hệ thống RAG - Retrieval-Augmented Generation).
-- 🛠️ **Hỗ trợ MCP** - Dễ dàng mở rộng tính năng thông qua Model Context Protocol.
+### Prerequisites
 
-## 🚀 Hướng dẫn cấu hình và cài đặt
+- Python (v3.10+)
+- Node.js (v18+)
+- PostgreSQL (Optional, falls back to JSON)
+- Redis (Optional, for caching)
 
-Để triển khai dự án trên môi trường local, vui lòng làm theo các bước sau:
+### Installation
 
-### Yêu cầu hệ thống (Prerequisites)
-
-- **Python** (phiên bản 3.10 trở lên)
-- **Node.js** (phiên bản 18 trở lên)
-- **PostgreSQL** (Tùy chọn, hệ thống có thể dùng JSON để thay thế)
-- **Redis** (Tùy chọn, dùng để caching)
-
-### Cài đặt
-
-1. **Cài đặt Backend**
+1. Backend Setup
    ```bash
    cd server
    python -m venv .venv
-   
-   # Kích hoạt môi trường ảo:
-   # Windows: .venv\Scripts\activate
-   # Linux/Mac: source .venv/bin/activate
-   
+   # Activate: .venv\Scripts\Activate (Windows) or source .venv/bin/activate (Linux/Mac)
    pip install -r requirements.txt
    ```
 
-2. **Cài đặt Frontend**
+2. Frontend Setup
    ```bash
-   cd ..
    npm install
    ```
 
-### Cấu hình file môi trường
+### Configuration
 
-**Cấu hình Backend** (tạo file `server/.env`):
+Backend (server/.env):
 ```env
 PORT=3000
 HOST=0.0.0.0
 FRONTEND_URL=http://localhost:5173
 
-# Cấu hình Database
-USE_DATABASE=true # Đặt là false nếu muốn dùng file JSON trong thư mục /data
+# Database
+USE_DATABASE=true
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=ai_tutor_db
-DB_USER=ai_tutor
+DB_NAME=mera
+DB_USER=mera
 DB_PASSWORD=your_password
 
-# Cấu hình LLM
+# LLM Config
 LLM_PROVIDER=ollama
 LLM_MODEL=mistral
 OLLAMA_BASE_URL=http://localhost:11434/v1
 ```
 
-**Cấu hình Frontend** (tạo file `.env` ở thư mục gốc):
+Frontend (.env):
 ```env
 VITE_API_URL=http://localhost:3000/api
 VITE_SOCKET_URL=http://localhost:3000
 ```
 
-### Chạy ứng dụng
+### Running the Application
 
-**Terminal 1: Chạy Backend**
+Terminal 1: Backend
 ```bash
 cd server
-# Đảm bảo môi trường ảo (venv) đã được kích hoạt
 python main.py
 ```
-*Server backend sẽ chạy tại: `http://localhost:3000`*
+Server runs on http://localhost:3000
 
-**Terminal 2: Chạy Frontend**
+Terminal 2: Frontend
 ```bash
-# Ở thư mục gốc của dự án
 npm run dev
 ```
-*Giao diện frontend sẽ chạy tại: `http://localhost:5173`*
+Frontend runs on http://localhost:5173
 
-## 📂 Cấu trúc thư mục
+## Project Structure
 
-```text
-ai-tutor-web/
+```
+mera/
 ├── server/
-│   ├── modules/              # Các module tính năng (auth, chat, llm, mcp, v.v.)
-│   ├── common/               # Các tiện ích dùng chung
-│   ├── config/               # Thư mục cấu hình
-│   ├── testing/              # Script kiểm thử
-│   ├── api_router.py         # Router chính của API
-│   └── main.py               # Điểm vào (Entry point) của server
-├── src/                      # Source code React Frontend
-├── data/                     # Lưu trữ dữ liệu JSON và Uploads
-├── docs/                     # Tài liệu và hình ảnh (chứa interface.png)
+│   ├── modules/              # Feature modules
+│   ├── common/               # Shared utilities
+│   ├── config/               # Configuration
+│   ├── testing/              # Verification scripts
+│   ├── api_router.py         # Main router
+│   └── main.py               # Entry point
+├── src/                      # React Frontend
+├── data/                     # Data storage (JSON/Uploads)
+├── docs/                     # Documentation and images
 └── README.md
 ```
 
----
-
-⭐️ **Nếu bạn thấy dự án này hữu ích, đừng quên cho chúng mình xin 1 star nhé! Cảm ơn bạn rất nhiều!** ⭐️
+If you find this project useful, please consider giving it a star!
