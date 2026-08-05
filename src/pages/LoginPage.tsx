@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import logo from '../assets/logo.png';
@@ -20,7 +20,7 @@ export default function LoginPage() {
         }
     }, [isAuthenticated, isLoading, navigate]);
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setError('');
         setIsSubmitting(true);
@@ -33,7 +33,8 @@ export default function LoginPage() {
             }
             navigate('/');
         } catch (err) {
-            setError(err.message || 'Authentication failed. Please check your credentials.');
+            const message = err instanceof Error ? err.message : 'Authentication failed. Please check your credentials.';
+            setError(message);
         } finally {
             setIsSubmitting(false);
         }

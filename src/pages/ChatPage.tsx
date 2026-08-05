@@ -4,7 +4,7 @@ import { useToast } from '../context/ToastContext'; // DEMO - remove after testi
 import ChatMessage from '../components/chat/ChatMessage';
 import ChatInput from '../components/chat/ChatInput';
 import TypingIndicator from '../components/chat/TypingIndicator';
-import AgentTaskList from '../components/chat/AgentTaskList';
+import AgentTaskList, { type AgentStep } from '../components/chat/AgentTaskList';
 import DocumentSideViewer from '../components/document/DocumentSideViewer';
 import DocumentListPanel from '../components/document/DocumentListPanel';
 import Topbar from '../components/Topbar';
@@ -15,8 +15,11 @@ import agentStreamService from '../services/agentStreamService';
 import websocketService from '../services/websocketService';
 import documentService from '../services/documentService';
 import logger from '../utils/logger';
+import type { ChatLayoutContext } from '../layouts/ChatLayout';
+import type { ChatMessage as ChatMessageType, DocumentItem, QuotaStatus } from '../types';
+import type { AgentRunEvent, AgentDoneEvent } from '../services/agentStreamService';
 
-const AGENT_NAME_MAP = {
+const AGENT_NAME_MAP: Record<string, string> = {
     research: 'Research Agent',
     planner: 'Planning Agent',
     implement: 'Implementation Agent',
@@ -26,35 +29,50 @@ const AGENT_NAME_MAP = {
 
 const SCROLL_THRESHOLD = 120; // px from bottom to consider "at bottom"
 
+interface AgentGroup {
+    id: string;
+    agentType: string;
+    agentName: string;
+    steps: AgentStep[];
+}
+
+interface ViewingDocument {
+    doc: DocumentItem | { filename?: string; id?: string };
+    pageStart?: string | null;
+    pageEnd?: string | null;
+}
+
+type SelectedDoc = DocumentItem & { active?: boolean };
+
 export default function ChatPage() {
-    const { activeConversationId, setActiveConversationId, settings, loadConversations, conversations } = useOutletContext();
+    const { activeConversationId, setActiveConversationId, settings, loadConversations, conversations } = useOutletContext<ChatLayoutContext>();
     const toast = useToast(); // DEMO - remove after testing
-    const [messages, setMessages] = useState([]);
+    const [messages, setMessages] = useState<ChatMessageType[]>([]);
     const [isTyping, setIsTyping] = useState(false);
     const [isStreaming, setIsStreaming] = useState(false);
     const [streamingMessage, setStreamingMessage] = useState('');
-    const [streamingThinking, setStreamingThinking] = useState(null);
-    const [thinkingDuration, setThinkingDuration] = useState(null);
-    const [agentGroups, setAgentGroups] = useState(null);
-    const [quotaStatus, setQuotaStatus] = useState(null);
+    const [streamingThinking, setStreamingThinking] = useState<string | null>(null);
+    const [thinkingDuration, setThinkingDuration] = useState<number | null>(null);
+    const [agentGroups, setAgentGroups] = useState<AgentGroup[] | null>(null);
+    const [quotaStatus, setQuotaStatus] = useState<QuotaStatus | null>(null);
     const [quotaWarning, setQuotaWarning] = useState(false);
     const [quotaBlocked, setQuotaBlocked] = useState(false);
-    const [selectedDocs, setSelectedDocs] = useState([]);
-    const [viewingDocument, setViewingDocument] = useState(null);
+    const [selectedDocs, setSelectedDocs] = useState<SelectedDoc[]>([]);
+    const [viewingDocument, setViewingDocument] = useState<ViewingDocument | null>(null);
     const [viewerWidth, setViewerWidth] = useState(400);
 
-    const splitPaneRef = useRef(null);
-    const viewerRef = useRef(null);
+    const splitPaneRef = useRef<HTMLDivElement>(null);
+    const viewerRef = useRef<HTMLDivElement>(null);
     const isResizing = useRef(false);
-    const chatScrollRef = useRef(null);
+    const chatScrollRef = useRef<HTMLDivElement>(null);
     const userScrolledUp = useRef(false);
-    const messagesEndRef = useRef(null);
-    const justCreatedConversationId = useRef(null);
-    const draftDocsRef = useRef({});
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const justCreatedConversationId = useRef<string | null>(null);
+    const draftDocsRef = useRef<Record<string, SelectedDoc[]>>({});
     const prevConvIdRef = useRef(activeConversationId);
     const thinkingTextRef = useRef('');
-    const thinkingStartRef = useRef(null);
-    const thinkingDurationRef = useRef(null);
+    const thinkingStartRef = useRef<number | null>(null);
+    const thinkingDurationRef = useRef<number | null>(null);
 
     // Resize handlers for the document side viewer
     const startResizing = useCallback(() => {
@@ -76,7 +94,7 @@ export default function ChatPage() {
         }
     }, []);
 
-    const resize = useCallback((e) => {
+    const resize = useCallback((e: MouseEvent) => {
         if (!isResizing.current || !splitPaneRef.current) return;
         const containerRect = splitPaneRef.current.getBoundingClientRect();
         let newWidth = containerRect.right - e.clientX;
@@ -108,8 +126,8 @@ export default function ChatPage() {
     // Save/restore doc selection per conversation
     useEffect(() => {
         if (prevConvIdRef.current !== activeConversationId) {
-            draftDocsRef.current[prevConvIdRef.current] = selectedDocs;
-            setSelectedDocs(draftDocsRef.current[activeConversationId] || []);
+            draftDocsRef.current[prevConvIdRef.current ?? ''] = selectedDocs;
+            setSelectedDocs(draftDocsRef.current[activeConversationId ?? ''] || []);
             prevConvIdRef.current = activeConversationId;
         }
     }, [activeConversationId, selectedDocs]);
@@ -162,7 +180,7 @@ export default function ChatPage() {
     useEffect(() => {
         const fetchQuota = async () => {
             try {
-                const status = await apiService.get(`/quota/status?conversationId=${activeConversationId || ''}`);
+                const status = await apiService.get<QuotaStatus>(`/quota/status?conversationId=${activeConversationId || ''}`);
                 setQuotaStatus(status);
                 setQuotaBlocked(!status.allowed);
                 setQuotaWarning(status.warning);
@@ -173,7 +191,7 @@ export default function ChatPage() {
         fetchQuota();
     }, [activeConversationId]);
 
-    const loadMessages = async (conversationId) => {
+    const loadMessages = async (conversationId: string) => {
         try {
             const msgs = await conversationService.getChatHistory(conversationId);
             setMessages(msgs);
@@ -184,19 +202,21 @@ export default function ChatPage() {
 
     const connectWebSocket = () => {
         websocketService.connect(
-            () => {},
-            () => {},
+            () => { },
+            () => { },
             (error) => logger.error('WebSocket error:', error)
         );
 
         websocketService.onMessageChunk((data) => {
-            setStreamingMessage(prev => prev + data.chunk);
+            const chunk = (data as { chunk: string }).chunk;
+            setStreamingMessage(prev => prev + chunk);
         });
 
         websocketService.onMessageComplete((data) => {
-            const newMessage = {
+            const fullResponse = (data as { fullResponse: string }).fullResponse;
+            const newMessage: ChatMessageType = {
                 role: 'assistant',
-                content: data.fullResponse,
+                content: fullResponse,
                 createdAt: new Date().toISOString()
             };
             setMessages(prev => [...prev, newMessage]);
@@ -210,7 +230,7 @@ export default function ChatPage() {
         });
 
         websocketService.onTyping((data) => {
-            setIsTyping(data.isTyping);
+            setIsTyping((data as { isTyping: boolean }).isTyping);
         });
 
         websocketService.onError((error) => {
@@ -237,11 +257,11 @@ export default function ChatPage() {
         setIsStreaming(false);
     };
 
-    const handleAgentTask = async (taskId, conversationId) => {
+    const handleAgentTask = async (taskId: string, conversationId: string | null) => {
         setIsStreaming(false);
         setAgentGroups([]);
 
-        const findGroupByAgent = (groups, agentType) => {
+        const findGroupByAgent = (groups: AgentGroup[], agentType: string) => {
             for (let i = groups.length - 1; i >= 0; i--) {
                 if (groups[i].agentType === agentType) return i;
             }
@@ -251,12 +271,12 @@ export default function ChatPage() {
         try {
             await agentStreamService.streamTask(
                 taskId,
-                (event) => {
+                (event: AgentRunEvent) => {
                     const output = event.output || {};
                     const agentType = event.agentType;
 
                     if (output.event === 'tasks_generated') {
-                        const tasks = (output.tasks || []).map((t, idx) => ({
+                        const tasks: AgentStep[] = (output.tasks || []).map((t, idx) => ({
                             id: `task_${idx}`,
                             label: t.description || `Task ${idx + 1}`,
                             status: 'pending',
@@ -297,16 +317,16 @@ export default function ChatPage() {
                         });
                     }
                 },
-                (event) => {
+                (event: AgentDoneEvent) => {
                     setAgentGroups(prev =>
                         prev ? prev.map(g => ({
                             ...g,
-                            steps: g.steps.map(s => ({ ...s, status: 'completed' })),
+                            steps: g.steps.map(s => ({ ...s, status: 'completed' as const })),
                         })) : prev
                     );
 
                     if (event.finalReport) {
-                        const aiMessage = {
+                        const aiMessage: ChatMessageType = {
                             role: 'assistant',
                             content: event.finalReport,
                             createdAt: new Date().toISOString(),
@@ -320,12 +340,12 @@ export default function ChatPage() {
                         setTimeout(() => loadConversations(), 2500);
                     }
                 },
-                (error) => {
+                (error: Error) => {
                     logger.error('Agent stream error:', error);
                     setAgentGroups(prev =>
                         prev ? prev.map(g => ({
                             ...g,
-                            steps: g.steps.map(s => s.status === 'processing' ? { ...s, status: 'failed' } : s),
+                            steps: g.steps.map(s => s.status === 'processing' ? { ...s, status: 'failed' as const } : s),
                         })) : prev
                     );
                     setIsTyping(false);
@@ -337,7 +357,7 @@ export default function ChatPage() {
         }
     };
 
-    const handleSendMessage = async (messageText) => {
+    const handleSendMessage = async (messageText: string) => {
         let currentId = activeConversationId;
 
         if (!currentId) {
@@ -355,7 +375,7 @@ export default function ChatPage() {
             }
         }
 
-        const userMessage = {
+        const userMessage: ChatMessageType = {
             role: 'user',
             content: messageText,
             createdAt: new Date().toISOString()
@@ -392,7 +412,7 @@ export default function ChatPage() {
                     setStreamingMessage(prev => prev + chunk);
                 },
                 (fullResponse) => {
-                    const aiMessage = {
+                    const aiMessage: ChatMessageType = {
                         role: 'assistant',
                         content: fullResponse,
                         createdAt: new Date().toISOString(),
@@ -453,9 +473,9 @@ export default function ChatPage() {
         }
     };
 
-    const handleCitationClick = async (filename, pageStart, docId, pageEnd = null) => {
+    const handleCitationClick = async (filename: string, pageStart: string | null, docId: string | null, pageEnd: string | null = null) => {
         try {
-            let docInfo = null;
+            let docInfo: DocumentItem | undefined;
 
             if (docId) {
                 docInfo = selectedDocs.find(d => d.id === docId);
@@ -465,8 +485,7 @@ export default function ChatPage() {
             }
 
             if (!docInfo) {
-                const docsResult = await documentService.getDocuments();
-                const allDocs = Array.isArray(docsResult) ? docsResult : (docsResult?.data || []);
+                const allDocs = await documentService.getDocuments();
 
                 if (docId) {
                     docInfo = allDocs.find(d => d.id === docId);
@@ -479,15 +498,15 @@ export default function ChatPage() {
             if (docInfo) {
                 setViewingDocument({ doc: docInfo, pageStart, pageEnd });
             } else {
-                setViewingDocument({ doc: { filename, id: docId }, pageStart, pageEnd });
+                setViewingDocument({ doc: { filename, id: docId ?? undefined }, pageStart, pageEnd });
             }
         } catch (error) {
             logger.error('Failed to open citation', error);
-            setViewingDocument({ doc: { filename, id: docId }, pageStart, pageEnd });
+            setViewingDocument({ doc: { filename, id: docId ?? undefined }, pageStart, pageEnd });
         }
     };
 
-    const handleDocumentsConfirm = (docs) => {
+    const handleDocumentsConfirm = (docs: DocumentItem[]) => {
         setSelectedDocs(prev => {
             const prevMap = new Map(prev.map(d => [d.id, d]));
             return docs.map(d => {
@@ -497,11 +516,11 @@ export default function ChatPage() {
         });
     };
 
-    const handleDocumentRemove = (docId) => {
+    const handleDocumentRemove = (docId: string) => {
         setSelectedDocs(prev => prev.filter(d => d.id !== docId));
     };
 
-    const handleDocumentToggle = (docId) => {
+    const handleDocumentToggle = (docId: string) => {
         setSelectedDocs(prev => prev.map(d => d.id === docId ? { ...d, active: d.active === false } : d));
     };
 
@@ -580,7 +599,7 @@ export default function ChatPage() {
                     <ChatInput
                         conversationId={activeConversationId}
                         onSend={handleSendMessage}
-                        disabled={isTyping && !isStreaming || quotaBlocked}
+                        disabled={(isTyping && !isStreaming) || quotaBlocked}
                         quotaBlocked={quotaBlocked}
                         quota={quotaStatus}
                         quotaWarning={quotaWarning}
