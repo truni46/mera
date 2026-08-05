@@ -7,6 +7,22 @@ import apiService from '../services/apiService';
 import Sidebar from '../components/Sidebar';
 import ToastContainer from '../components/ui/Toast';
 import logger from '../utils/logger';
+import type { ConversationSummary } from '../types';
+
+export interface AppSettings {
+    communication_mode: string;
+    show_timestamps: boolean;
+    theme: string;
+    welcome_message: string;
+}
+
+export interface ChatLayoutContext {
+    activeConversationId: string | null;
+    settings: AppSettings;
+    loadConversations: () => Promise<void>;
+    setActiveConversationId: (id: string | null) => void;
+    conversations: ConversationSummary[];
+}
 
 export default function ChatLayout() {
     const { user, isAuthenticated, isLoading } = useAuth();
@@ -18,11 +34,11 @@ export default function ChatLayout() {
     const pathMatch = location.pathname.match(/^\/c\/(.+)/);
     const activeConversationId = pathMatch ? pathMatch[1] : null;
 
-    const setActiveConversationId = (id) => navigate(id ? `/c/${id}` : '/');
+    const setActiveConversationId = (id: string | null) => navigate(id ? `/c/${id}` : '/');
 
     // Lifted State
-    const [conversations, setConversations] = useState([]);
-    const [settings, setSettings] = useState({
+    const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+    const [settings, setSettings] = useState<AppSettings>({
         communication_mode: 'streaming',
         show_timestamps: true,
         theme: 'light-green',
@@ -31,8 +47,8 @@ export default function ChatLayout() {
 
     // Delete Confirmation State
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-    const [itemToDelete, setItemToDelete] = useState(null);
-    const [deletingId, setDeletingId] = useState(null); // For animation
+    const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null); // For animation
 
     // Load initial data
     useEffect(() => {
@@ -53,7 +69,7 @@ export default function ChatLayout() {
 
     const loadSettings = async () => {
         try {
-            const settingsData = await apiService.get('/settings');
+            const settingsData = await apiService.get<AppSettings>('/settings');
             setSettings(settingsData);
         } catch (error) {
             logger.error('Error loading settings:', error);
@@ -64,11 +80,11 @@ export default function ChatLayout() {
         navigate('/');
     };
 
-    const handleSelectConversation = (id) => {
+    const handleSelectConversation = (id: string) => {
         navigate(`/c/${id}`);
     };
 
-    const handleDeleteRequest = (id) => {
+    const handleDeleteRequest = (id: string) => {
         setItemToDelete(id);
         setShowDeleteConfirm(true);
     };
@@ -108,7 +124,7 @@ export default function ChatLayout() {
     const handleDeleteConversation = handleDeleteRequest;
 
 
-    const handleSaveSettings = async (newSettings) => {
+    const handleSaveSettings = async (newSettings: AppSettings) => {
         try {
             await apiService.put('/settings', newSettings);
             setSettings(newSettings);
@@ -151,7 +167,7 @@ export default function ChatLayout() {
                     loadConversations,
                     setActiveConversationId,
                     conversations,
-                }} />
+                } satisfies ChatLayoutContext} />
             </div>
 
             {/* Delete Confirmation Modal */}
