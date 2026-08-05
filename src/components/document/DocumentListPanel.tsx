@@ -1,7 +1,16 @@
 import { useState } from 'react';
 import { FiChevronDown, FiChevronUp, FiX, FiCheck } from 'react-icons/fi';
+import type { DocumentItem } from '../../types';
 
-export default function DocumentListPanel({ selectedDocs, onToggle, onRemove }) {
+type SelectedDoc = DocumentItem & { active?: boolean };
+
+interface DocumentListPanelProps {
+    selectedDocs: SelectedDoc[];
+    onToggle: (docId: string) => void;
+    onRemove: (docId: string) => void;
+}
+
+export default function DocumentListPanel({ selectedDocs, onToggle, onRemove }: DocumentListPanelProps) {
     const [collapsed, setCollapsed] = useState(false);
 
     if (!selectedDocs || selectedDocs.length === 0) return null;
@@ -38,11 +47,10 @@ export default function DocumentListPanel({ selectedDocs, onToggle, onRemove }) 
                                 <button
                                     type="button"
                                     onClick={() => onToggle?.(doc.id)}
-                                    className={`w-4 h-4 flex-shrink-0 rounded-md border flex items-center justify-center transition-colors ${
-                                        isActive
-                                            ? 'bg-primary border-primary text-white'
-                                            : 'bg-white border-gray-300 hover:border-gray-400'
-                                    }`}
+                                    className={`w-4 h-4 flex-shrink-0 rounded-md border flex items-center justify-center transition-colors ${isActive
+                                        ? 'bg-primary border-primary text-white'
+                                        : 'bg-white border-gray-300 hover:border-gray-400'
+                                        }`}
                                     title={isActive ? `Bỏ dùng ${doc.filename}` : `Dùng lại ${doc.filename}`}
                                     aria-checked={isActive}
                                     role="checkbox"
@@ -52,9 +60,8 @@ export default function DocumentListPanel({ selectedDocs, onToggle, onRemove }) 
 
                                 {/* Filename — dimmed when inactive */}
                                 <span
-                                    className={`text-xs truncate flex-1 ${
-                                        isActive ? 'text-text-primary' : 'text-text-muted line-through'
-                                    }`}
+                                    className={`text-xs truncate flex-1 ${isActive ? 'text-text-primary' : 'text-text-muted line-through'
+                                        }`}
                                     title={doc.filename}
                                 >
                                     {doc.filename}

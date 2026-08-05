@@ -2,8 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { FiX, FiCopy, FiCheck, FiZoomIn, FiZoomOut, FiAlignLeft } from 'react-icons/fi';
 import documentService from '../../services/documentService';
 import PDFViewer from '../viewer/PDFViewer';
+import type { DocumentItem } from '../../types';
 
-function ImageViewer({ fileUrl }) {
+interface ImageViewerProps {
+    fileUrl: string | null;
+}
+
+function ImageViewer({ fileUrl }: ImageViewerProps) {
     if (!fileUrl) return (
         <div className="flex items-center justify-center h-full text-sm text-gray-400">Loading...</div>
     );
@@ -14,7 +19,18 @@ function ImageViewer({ fileUrl }) {
     );
 }
 
-function OcrTextPanel({ text, loading, error }) {
+interface OcrPage {
+    pageNum: number | null;
+    content: string;
+}
+
+interface OcrTextPanelProps {
+    text: string;
+    loading: boolean;
+    error: string | null;
+}
+
+function OcrTextPanel({ text, loading, error }: OcrTextPanelProps) {
     const [copied, setCopied] = useState(false);
 
     const handleCopy = useCallback(() => {
@@ -26,11 +42,11 @@ function OcrTextPanel({ text, loading, error }) {
     }, [text]);
 
     // Parse page markers written by saveOcrText: "=== Page N ===\n..."
-    const pages = text
+    const pages: OcrPage[] = text
         ? (() => {
             const parts = text.split(/^=== Page (\d+) ===\s*$/m);
             // parts = [before, pageNum, content, pageNum, content, ...]
-            const result = [];
+            const result: OcrPage[] = [];
             for (let i = 1; i < parts.length; i += 2) {
                 const pageNum = parseInt(parts[i], 10);
                 const content = (parts[i + 1] || '').trim();
@@ -105,23 +121,28 @@ function OcrTextPanel({ text, loading, error }) {
     );
 }
 
-export default function OcrViewerModal({ document, onClose }) {
-    const [fileUrl, setFileUrl] = useState(null);
-    const [fileError, setFileError] = useState(null);
+interface OcrViewerModalProps {
+    document: DocumentItem;
+    onClose: () => void;
+}
+
+export default function OcrViewerModal({ document, onClose }: OcrViewerModalProps) {
+    const [fileUrl, setFileUrl] = useState<string | null>(null);
+    const [fileError, setFileError] = useState<string | null>(null);
     const [scale, setScale] = useState(1.0);
     const [ocrText, setOcrText] = useState('');
     const [ocrLoading, setOcrLoading] = useState(true);
-    const [ocrError, setOcrError] = useState(null);
+    const [ocrError, setOcrError] = useState<string | null>(null);
 
-    const zoomIn  = useCallback(() => setScale(s => Math.min(3.0, parseFloat((s + 0.1).toFixed(1)))), []);
+    const zoomIn = useCallback(() => setScale(s => Math.min(3.0, parseFloat((s + 0.1).toFixed(1)))), []);
     const zoomOut = useCallback(() => setScale(s => Math.max(0.2, parseFloat((s - 0.1).toFixed(1)))), []);
 
     const fileType = document?.fileType || '';
-    const isPdf    = fileType === 'pdf';
-    const isImage  = ['png', 'jpg', 'jpeg', 'bmp', 'webp', 'tiff'].includes(fileType);
+    const isPdf = fileType === 'pdf';
+    const isImage = ['png', 'jpg', 'jpeg', 'bmp', 'webp', 'tiff'].includes(fileType);
 
     useEffect(() => {
-        let objectUrl = null;
+        let objectUrl: string | null = null;
         documentService.getDocumentFileUrl(document.id)
             .then(url => { objectUrl = url; setFileUrl(url); })
             .catch(() => setFileError('Could not load original file.'));
@@ -195,7 +216,7 @@ export default function OcrViewerModal({ document, onClose }) {
                             <div className="flex items-center justify-center h-full text-sm text-red-400">
                                 {fileError}
                             </div>
-                        ) : isPdf ? (
+                        ) : isPdf && fileUrl ? (
                             <PDFViewer fileUrl={fileUrl} scale={scale} onScaleChange={setScale} />
                         ) : isImage ? (
                             <ImageViewer fileUrl={fileUrl} />

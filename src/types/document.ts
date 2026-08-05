@@ -14,6 +14,7 @@ export interface DocumentItem {
     chunkCount?: number;
     pageCount?: number;
     summary?: string;
+    summaryStatus?: string;
     description?: string;
     tags?: string[];
     ocrStatus?: string | null;

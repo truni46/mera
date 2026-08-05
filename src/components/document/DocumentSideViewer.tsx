@@ -7,14 +7,15 @@ import ExcelViewer from '../viewer/ExcelViewer';
 import TextViewer from '../viewer/TextViewer';
 import TSVViewer from '../viewer/TSVViewer';
 import MarkdownViewer from '../viewer/MarkdownViewer';
+import type { DocumentItem } from '../../types';
 
-function parsePageLabel(str) {
+function parsePageLabel(str?: string | number | null): number {
     if (!str) return 1;
-    const n = parseInt(str, 10);
+    const n = parseInt(String(str), 10);
     if (!isNaN(n) && n > 0) return n;
     // Roman numeral fallback (handles i, iv, viii, xii, etc.)
-    const romanMap = { I:1, V:5, X:10, L:50, C:100, D:500, M:1000 };
-    const upper = str.trim().toUpperCase();
+    const romanMap: Record<string, number> = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 };
+    const upper = String(str).trim().toUpperCase();
     let result = 0, prev = 0;
     for (let i = upper.length - 1; i >= 0; i--) {
         const val = romanMap[upper[i]];
@@ -26,9 +27,22 @@ function parsePageLabel(str) {
     return result > 0 ? result : 1;
 }
 
-export default function DocumentSideViewer({ document, pageStart, pageEnd, onClose }) {
-    const [fileUrl, setFileUrl] = useState(null);
-    const [fileError, setFileError] = useState(null);
+// The document may arrive as a full DocumentItem, or (before it's fully
+// resolved, e.g. right after clicking a citation) as a placeholder skeleton
+// with only filename/id — some legacy callers used `name` instead of
+// `filename`, so both are supported here.
+type ViewerDocument = Partial<DocumentItem> & { name?: string };
+
+interface DocumentSideViewerProps {
+    document?: ViewerDocument | null;
+    pageStart?: string | number | null;
+    pageEnd?: string | number | null;
+    onClose: () => void;
+}
+
+export default function DocumentSideViewer({ document, pageStart, pageEnd, onClose }: DocumentSideViewerProps) {
+    const [fileUrl, setFileUrl] = useState<string | null>(null);
+    const [fileError, setFileError] = useState<string | null>(null);
     const [scale, setScale] = useState(0.7);
 
     // Compute initial page — supports Arabic numbers and Roman numerals (viii → 8)
@@ -39,18 +53,18 @@ export default function DocumentSideViewer({ document, pageStart, pageEnd, onClo
         ? (pageEnd ? `Pages ${pageStart}–${pageEnd}` : `Page ${pageStart}`)
         : null;
 
-    const zoomIn  = useCallback(() => setScale(s => Math.min(3.0, parseFloat((s + 0.1).toFixed(1)))), []);
+    const zoomIn = useCallback(() => setScale(s => Math.min(3.0, parseFloat((s + 0.1).toFixed(1)))), []);
     const zoomOut = useCallback(() => setScale(s => Math.max(0.2, parseFloat((s - 0.1).toFixed(1)))), []);
 
     // Safety check just in case document is malformed or just a filename skeleton
     const filename = document?.filename || document?.name || 'document';
-    const fileType = document?.fileType || filename.split('.').pop().toLowerCase();
+    const fileType = document?.fileType || filename.split('.').pop()?.toLowerCase();
 
-    const isPdf   = fileType === 'pdf';
-    const isWord   = fileType === 'docx' || fileType === 'doc';
-    const isExcel  = fileType === 'xlsx' || fileType === 'xls' || fileType === 'csv';
-    const isText   = fileType === 'txt';
-    const isTsv    = fileType === 'tsv';
+    const isPdf = fileType === 'pdf';
+    const isWord = fileType === 'docx' || fileType === 'doc';
+    const isExcel = fileType === 'xlsx' || fileType === 'xls' || fileType === 'csv';
+    const isText = fileType === 'txt';
+    const isTsv = fileType === 'tsv';
     const isMarkdown = fileType === 'md';
 
     useEffect(() => {
@@ -61,13 +75,13 @@ export default function DocumentSideViewer({ document, pageStart, pageEnd, onClo
         setFileError(null);
         setScale(0.7);
 
-        let objectUrl = null;
+        let objectUrl: string | null = null;
         documentService.getDocumentFileUrl(document.id)
             .then(url => {
                 objectUrl = url;
                 setFileUrl(url);
             })
-            .catch(err => setFileError(
+            .catch((err: { status?: number }) => setFileError(
                 err.status === 404
                     ? 'Document no longer exists or has been deleted.'
                     : 'Could not load file preview.'
@@ -87,9 +101,9 @@ export default function DocumentSideViewer({ document, pageStart, pageEnd, onClo
                 <div className="flex items-center gap-3 overflow-hidden">
                     <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white border shadow-sm flex-shrink-0">
                         {isPdf ? <FiFileText className="text-orange-500" /> :
-                         isWord ? <FiFileText className="text-blue-500" /> :
-                         isExcel ? <FiFileText className="text-green-500" /> :
-                         <FiFileText className="text-gray-500" />}
+                            isWord ? <FiFileText className="text-blue-500" /> :
+                                isExcel ? <FiFileText className="text-green-500" /> :
+                                    <FiFileText className="text-gray-500" />}
                     </div>
                     <div className="flex flex-col min-w-0">
                         <h3 className="text-sm font-semibold text-text-primary truncate" title={filename}>
@@ -135,7 +149,7 @@ export default function DocumentSideViewer({ document, pageStart, pageEnd, onClo
                     <div className="flex items-center justify-center h-full text-sm text-red-500">
                         {fileError}
                     </div>
-                ) : isPdf ? (
+                ) : !fileUrl ? null : isPdf ? (
                     <PDFViewer fileUrl={fileUrl} initialPage={initialPage} scale={scale} onScaleChange={setScale} />
                 ) : isWord ? (
                     <WordViewer fileUrl={fileUrl} initialPage={initialPage} scale={scale} onScaleChange={setScale} />

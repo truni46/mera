@@ -8,37 +8,43 @@ import TextViewer from '../viewer/TextViewer';
 import TSVViewer from '../viewer/TSVViewer';
 import MarkdownViewer from '../viewer/MarkdownViewer';
 import DocumentStatusBadge from './DocumentStatusBadge';
+import type { DocumentItem } from '../../types';
 
-function formatDate(dateStr) {
+function formatDate(dateStr: string): string {
     return new Date(dateStr).toLocaleDateString('en-US', {
         month: 'short', day: 'numeric', year: 'numeric',
     });
 }
 
-export default function DocumentDetailModal({ document, onClose }) {
-    const [fileUrl, setFileUrl] = useState(null);
-    const [fileError, setFileError] = useState(null);
+interface DocumentDetailModalProps {
+    document: DocumentItem;
+    onClose: () => void;
+}
+
+export default function DocumentDetailModal({ document, onClose }: DocumentDetailModalProps) {
+    const [fileUrl, setFileUrl] = useState<string | null>(null);
+    const [fileError, setFileError] = useState<string | null>(null);
     const [scale, setScale] = useState(1.0);
 
-    const zoomIn  = useCallback(() => setScale(s => Math.min(3.0, parseFloat((s + 0.1).toFixed(1)))), []);
+    const zoomIn = useCallback(() => setScale(s => Math.min(3.0, parseFloat((s + 0.1).toFixed(1)))), []);
     const zoomOut = useCallback(() => setScale(s => Math.max(0.2, parseFloat((s - 0.1).toFixed(1)))), []);
 
     const fileType = document.fileType;
-    const isPdf     = fileType === 'pdf';
-    const isWord     = fileType === 'docx' || fileType === 'doc';
-    const isExcel    = fileType === 'xlsx' || fileType === 'xls' || fileType === 'csv';
-    const isText     = fileType === 'txt';
-    const isTsv      = fileType === 'tsv';
+    const isPdf = fileType === 'pdf';
+    const isWord = fileType === 'docx' || fileType === 'doc';
+    const isExcel = fileType === 'xlsx' || fileType === 'xls' || fileType === 'csv';
+    const isText = fileType === 'txt';
+    const isTsv = fileType === 'tsv';
     const isMarkdown = fileType === 'md';
 
     useEffect(() => {
-        let objectUrl = null;
+        let objectUrl: string | null = null;
         documentService.getDocumentFileUrl(document.id)
             .then(url => {
                 objectUrl = url;
                 setFileUrl(url);
             })
-            .catch(err => setFileError(
+            .catch((err: { status?: number }) => setFileError(
                 err.status === 404
                     ? 'Document no longer exists or has been deleted.'
                     : 'Could not load file preview.'
@@ -91,19 +97,19 @@ export default function DocumentDetailModal({ document, onClose }) {
                             <div className="flex items-center justify-center h-full text-sm text-red-500">
                                 {fileError}
                             </div>
-                        ) : isPdf ? (
+                        ) : isPdf && fileUrl ? (
                             <PDFViewer fileUrl={fileUrl} scale={scale} onScaleChange={setScale} />
-                        ) : isWord ? (
+                        ) : isWord && fileUrl ? (
                             <WordViewer fileUrl={fileUrl} />
-                        ) : isExcel ? (
+                        ) : isExcel && fileUrl ? (
                             <ExcelViewer fileUrl={fileUrl} />
-                        ) : isText ? (
+                        ) : isText && fileUrl ? (
                             <TextViewer fileUrl={fileUrl} />
-                        ) : isTsv ? (
+                        ) : isTsv && fileUrl ? (
                             <TSVViewer fileUrl={fileUrl} />
-                        ) : isMarkdown ? (
+                        ) : isMarkdown && fileUrl ? (
                             <MarkdownViewer fileUrl={fileUrl} />
-                        ) : (
+                        ) : !fileUrl ? null : (
                             <div className="flex flex-col items-center justify-center h-full gap-4">
                                 <FiFileText size={48} className="text-gray-300" />
                                 <p className="text-sm text-gray-500">
@@ -127,7 +133,7 @@ export default function DocumentDetailModal({ document, onClose }) {
                         </h3>
 
                         <div className="space-y-3 text-sm text-text-secondary">
-                            {document.pageCount > 0 && (
+                            {(document.pageCount ?? 0) > 0 && (
                                 <div className="flex items-center gap-2">
                                     <FiBookOpen size={16} />
                                     <span>
@@ -160,7 +166,7 @@ export default function DocumentDetailModal({ document, onClose }) {
                                     {document.summary}
                                 </p>
                             ) : document.summaryStatus === 'processing' ||
-                              document.summaryStatus === 'pending' ? (
+                                document.summaryStatus === 'pending' ? (
                                 <div className="space-y-2">
                                     <div className="h-3 bg-gray-200 rounded animate-pulse w-full" />
                                     <div className="h-3 bg-gray-200 rounded animate-pulse w-4/5" />

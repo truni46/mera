@@ -4,15 +4,25 @@ import { HiTrash } from 'react-icons/hi2';
 import DocumentStatusBadge from './DocumentStatusBadge';
 import { TableRow, TableCell } from '../ui/Table';
 import Checkbox from '../ui/Checkbox';
+import type { DocumentItem } from '../../types';
 
-function formatFileSize(bytes) {
+function formatFileSize(bytes?: number): string {
     if (!bytes) return '—';
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function DocumentCard({ document, selected, onToggleSelect, onView, onDelete, onViewOcr }) {
+interface DocumentCardProps {
+    document: DocumentItem;
+    selected: boolean;
+    onToggleSelect: () => void;
+    onView: (doc: DocumentItem) => void;
+    onDelete: (id: string) => void;
+    onViewOcr: (doc: DocumentItem) => void;
+}
+
+export default function DocumentCard({ document, selected, onToggleSelect, onView, onDelete, onViewOcr }: DocumentCardProps) {
     const [hovered, setHovered] = useState(false);
     const date = new Date(document.createdAt).toLocaleDateString('en-GB', {
         day: '2-digit', month: 'short', year: 'numeric',

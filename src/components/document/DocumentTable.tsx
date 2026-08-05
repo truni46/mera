@@ -7,25 +7,34 @@ import ConfirmDialog from '../ui/ConfirmDialog';
 import Table from '../ui/Table';
 import Checkbox from '../ui/Checkbox';
 import documentService from '../../services/documentService';
+import type { DocumentItem } from '../../types';
 
 const POLL_INTERVAL_MS = 3000;
 const PAGE_SIZE = 10;
 
-function hasProcessingDocs(docs) {
+function hasProcessingDocs(docs: DocumentItem[]): boolean {
     return docs.some(
         d => d.embeddingStatus === 'processing' || d.embeddingStatus === 'pending',
     );
 }
 
-export default function DocumentTable({ refreshTrigger }) {
-    const [documents, setDocuments] = useState([]);
+type DeleteTarget =
+    | { bulk?: false; id: string; filename: string }
+    | { bulk: true; ids: string[]; count: number };
+
+interface DocumentTableProps {
+    refreshTrigger: number;
+}
+
+export default function DocumentTable({ refreshTrigger }: DocumentTableProps) {
+    const [documents, setDocuments] = useState<DocumentItem[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedDoc, setSelectedDoc] = useState(null);
-    const [ocrDoc, setOcrDoc] = useState(null);
+    const [selectedDoc, setSelectedDoc] = useState<DocumentItem | null>(null);
+    const [ocrDoc, setOcrDoc] = useState<DocumentItem | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
-    const [selectedIds, setSelectedIds] = useState(new Set());
-    const pollingRef = useRef(null);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const fetchDocuments = async (showLoading = false) => {
         if (showLoading) setLoading(true);
@@ -54,7 +63,7 @@ export default function DocumentTable({ refreshTrigger }) {
                 try {
                     const docs = await documentService.getDocuments();
                     setDocuments(docs);
-                    if (!hasProcessingDocs(docs)) {
+                    if (!hasProcessingDocs(docs) && pollingRef.current) {
                         clearInterval(pollingRef.current);
                         pollingRef.current = null;
                     }
@@ -105,7 +114,7 @@ export default function DocumentTable({ refreshTrigger }) {
         }
     };
 
-    const toggleSelect = (id) => {
+    const toggleSelect = (id: string) => {
         setSelectedIds(prev => {
             const next = new Set(prev);
             if (next.has(id)) next.delete(id);
@@ -114,10 +123,10 @@ export default function DocumentTable({ refreshTrigger }) {
         });
     };
 
-    const [deleteTarget, setDeleteTarget] = useState(null);
+    const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
     const [bulkDeleting, setBulkDeleting] = useState(false);
 
-    const handleDeleteRequest = useCallback((documentId) => {
+    const handleDeleteRequest = useCallback((documentId: string) => {
         const doc = documents.find(d => d.id === documentId);
         setDeleteTarget({ id: documentId, filename: doc?.filename || 'this document' });
     }, [documents]);
@@ -157,8 +166,8 @@ export default function DocumentTable({ refreshTrigger }) {
         setDeleteTarget(null);
     }, []);
 
-    const buildPageNumbers = () => {
-        const pages = [];
+    const buildPageNumbers = (): (number | string)[] => {
+        const pages: (number | string)[] = [];
         if (totalPages <= 7) {
             for (let i = 1; i <= totalPages; i++) pages.push(i);
             return pages;
@@ -201,11 +210,10 @@ export default function DocumentTable({ refreshTrigger }) {
                         <button
                             onClick={handleBulkDeleteRequest}
                             disabled={!hasSelection || bulkDeleting}
-                            className={`p-1.5 rounded-md transition-colors ${
-                                hasSelection
-                                    ? 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                                    : 'text-gray-300 cursor-not-allowed'
-                            }`}
+                            className={`p-1.5 rounded-md transition-colors ${hasSelection
+                                ? 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                                : 'text-gray-300 cursor-not-allowed'
+                                }`}
                             title={hasSelection ? `Delete ${selectedIds.size} selected` : 'Select items to delete'}
                         >
                             <FiTrash2 size={16} />
@@ -253,12 +261,11 @@ export default function DocumentTable({ refreshTrigger }) {
                                     ) : (
                                         <button
                                             key={page}
-                                            onClick={() => setCurrentPage(page)}
-                                            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                                                currentPage === page
-                                                    ? 'bg-primary text-white font-medium'
-                                                    : 'hover:bg-gray-100 text-text-secondary'
-                                            }`}
+                                            onClick={() => setCurrentPage(page as number)}
+                                            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${currentPage === page
+                                                ? 'bg-primary text-white font-medium'
+                                                : 'hover:bg-gray-100 text-text-secondary'
+                                                }`}
                                         >
                                             {page}
                                         </button>

@@ -8,6 +8,10 @@ interface ApiError extends Error {
     status?: number;
 }
 
+interface OcrTextResponse {
+    text?: string;
+}
+
 class DocumentService {
     uploadDocuments(
         files: File[],
@@ -78,8 +82,8 @@ class DocumentService {
         return URL.createObjectURL(blob);
     }
 
-    async getDocumentOcrText(documentId: string): Promise<unknown> {
-        return apiService.get(`/knowledge/documents/${documentId}/ocr`);
+    async getDocumentOcrText(documentId: string): Promise<OcrTextResponse> {
+        return apiService.get<OcrTextResponse>(`/knowledge/documents/${documentId}/ocr`);
     }
 
     async deleteDocument(documentId: string): Promise<void> {
