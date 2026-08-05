@@ -1,11 +1,21 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiService from '../services/apiService';
+import type { User } from '../types';
 
-const AuthContext = createContext(null);
+interface AuthContextValue {
+    user: User | null;
+    isAuthenticated: boolean;
+    isLoading: boolean;
+    login: (email: string, password: string) => Promise<boolean>;
+    register: (email: string, password: string, fullName: string) => Promise<boolean>;
+    logout: () => void;
+}
 
-export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+    const [user, setUser] = useState<User | null>(null);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const navigate = useNavigate();
@@ -30,8 +40,7 @@ export const AuthProvider = ({ children }) => {
             const token = localStorage.getItem('accessToken');
             if (token) {
                 try {
-                    // Verify token and get user info
-                    const userData = await apiService.get('/auth/me');
+                    const userData = await apiService.get<User>('/auth/me');
                     setUser(userData);
                     setIsAuthenticated(true);
                 } catch (error) {
@@ -47,14 +56,13 @@ export const AuthProvider = ({ children }) => {
         checkAuth();
     }, []);
 
-    // Login function
-    const login = async (email, password) => {
+    const login = async (email: string, password: string): Promise<boolean> => {
         try {
             const formData = new URLSearchParams();
             formData.append('username', email); // OAuth2PasswordRequestForm expects username
             formData.append('password', password);
 
-            const response = await apiService.request('/auth/login', {
+            const response = await apiService.request<{ access_token: string; user: User }>('/auth/login', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
@@ -64,7 +72,6 @@ export const AuthProvider = ({ children }) => {
 
             const { access_token, user: userData } = response;
 
-            // Save token
             localStorage.setItem('accessToken', access_token);
 
             setUser(userData);
@@ -76,15 +83,13 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Register function
-    const register = async (email, password, fullName) => {
+    const register = async (email: string, password: string, fullName: string): Promise<boolean> => {
         try {
             await apiService.post('/auth/register', {
                 email,
                 password,
                 full_name: fullName
             });
-            // Auto login after register
             return await login(email, password);
         } catch (error) {
             console.error('Register error:', error);
@@ -99,7 +104,7 @@ export const AuthProvider = ({ children }) => {
     );
 };
 
-export const useAuth = () => {
+export const useAuth = (): AuthContextValue => {
     const context = useContext(AuthContext);
     if (!context) {
         throw new Error('useAuth must be used within an AuthProvider');
