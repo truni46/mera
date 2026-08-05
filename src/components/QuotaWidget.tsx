@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
+import type { QuotaStatus } from '../types';
 
-function formatTokens(n) {
+function formatTokens(n: number): string {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
     if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
     return String(n);
 }
 
-function formatTime(seconds) {
+function formatTime(seconds: number): string {
     if (seconds <= 0) return '0m';
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -14,13 +15,21 @@ function formatTime(seconds) {
     return `${m}m`;
 }
 
-function getColor(percent) {
+function getColor(percent: number): { bg: string; text: string; ring: string } {
     if (percent >= 0.9) return { bg: 'bg-red-500', text: 'text-red-600', ring: 'ring-red-400' };
     if (percent >= 0.7) return { bg: 'bg-yellow-500', text: 'text-yellow-600', ring: 'ring-yellow-400' };
     return { bg: 'bg-green-500', text: 'text-green-600', ring: 'ring-green-400' };
 }
 
-function ProgressBar({ label, used, limit, percent, extra }) {
+interface ProgressBarProps {
+    label: string;
+    used: number;
+    limit: number;
+    percent: number;
+    extra?: string;
+}
+
+function ProgressBar({ label, used, limit, percent, extra }: ProgressBarProps) {
     const color = getColor(percent);
     return (
         <div className="mb-3 last:mb-0">
@@ -43,21 +52,27 @@ function ProgressBar({ label, used, limit, percent, extra }) {
     );
 }
 
-export default function QuotaWidget({ quota, warning, inline = false }) {
+interface QuotaWidgetProps {
+    quota: QuotaStatus | null;
+    warning?: boolean;
+    inline?: boolean;
+}
+
+export default function QuotaWidget({ quota, warning, inline = false }: QuotaWidgetProps) {
     const [expanded, setExpanded] = useState(false);
-    const panelRef = useRef(null);
-    const buttonRef = useRef(null);
+    const panelRef = useRef<HTMLDivElement>(null);
+    const buttonRef = useRef<HTMLButtonElement>(null);
     const [panelPos, setPanelPos] = useState({ bottom: 0, left: 0 });
 
     useEffect(() => {
         if (warning && quota) setExpanded(true);
-    }, [warning]);
+    }, [warning, quota]);
 
     useEffect(() => {
-        const handleClickOutside = (e) => {
+        const handleClickOutside = (e: MouseEvent) => {
             if (
-                panelRef.current && !panelRef.current.contains(e.target) &&
-                buttonRef.current && !buttonRef.current.contains(e.target)
+                panelRef.current && !panelRef.current.contains(e.target as Node) &&
+                buttonRef.current && !buttonRef.current.contains(e.target as Node)
             ) {
                 setExpanded(false);
             }

@@ -1,4 +1,9 @@
-export default function ModeSelector({ mode, onChange }) {
+interface ModeSelectorProps {
+    mode: string;
+    onChange: (mode: string) => void;
+}
+
+export default function ModeSelector({ mode, onChange }: ModeSelectorProps) {
     return (
         <div className="flex items-center space-x-2 bg-bg-secondary border border-border rounded-lg p-1">
             <button
@@ -21,7 +26,7 @@ export default function ModeSelector({ mode, onChange }) {
             >
                 <span className="mr-1">⚡</span>
                 WebSocket
-            </button >
-        </div >
+            </button>
+        </div>
     );
 }

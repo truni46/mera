@@ -7,6 +7,7 @@ export interface DocumentItem {
     fileType?: string;
     fileSize?: number;
     embeddingStatus?: string;
+    embeddingError?: string | null;
     scope?: string;
     ownerId?: string;
     storedFilename?: string;

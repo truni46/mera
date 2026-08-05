@@ -1,9 +1,16 @@
 import ReactMarkdown from 'react-markdown';
 import ThinkingBlock from './ThinkingBlock';
+import type { ChatMessage as ChatMessageType } from '../../types';
 
-export default function ChatMessage({ message, showTimestamp = true, onDocumentClick }) {
+interface ChatMessageProps {
+    message: ChatMessageType;
+    showTimestamp?: boolean;
+    onDocumentClick?: (filename: string, pageStart: string | null, docId: string | null, pageEnd?: string | null) => void;
+}
+
+export default function ChatMessage({ message, showTimestamp = true, onDocumentClick }: ChatMessageProps) {
     const isUser = message.role === 'user';
-    const date = new Date(message.createdAt || message.timestamp);
+    const date = new Date(message.createdAt || message.timestamp || Date.now());
     const day = date.getDate().toString().padStart(2, '0');
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const year = date.getFullYear().toString();
@@ -23,15 +30,12 @@ export default function ChatMessage({ message, showTimestamp = true, onDocumentC
                             {isUser ? (
                                 <p className="whitespace-pre-wrap !text-[14.5px] !leading-loose">{message.content}</p>
                             ) : (() => {
-                                // Helper: extract page range from docref attrs
-                                // Supports: page="12", pages="12-20", pageStart="12" pageEnd="20"
-                                function extractPages(attrs) {
+                                function extractPages(attrs: string): { start: string | null; end: string | null } {
                                     const page = attrs.match(/\bpage=(['"])(.*?)\1/)?.[2];
                                     const pages = attrs.match(/\bpages=(['"])(.*?)\1/)?.[2];
                                     const pageStart = attrs.match(/\bpageStart=(['"])(.*?)\1/)?.[2];
                                     const pageEnd = attrs.match(/\bpageEnd=(['"])(.*?)\1/)?.[2];
 
-                                    // Parse a "12-20" range string
                                     if (pages) {
                                         const m = pages.match(/^(\d+)(?:-(\d+))?$/);
                                         return m ? { start: m[1], end: m[2] || null } : { start: null, end: null };
@@ -41,41 +45,37 @@ export default function ChatMessage({ message, showTimestamp = true, onDocumentC
                                     return { start: null, end: null };
                                 }
 
-                                // Build chip label as "<filename> p.<N>" (or range) — ignore inner tag text
-                                function buildChipLabel(file, start, end) {
+                                function buildChipLabel(file: string, start: string | null, end: string | null): string {
                                     if (!file) return '';
                                     if (start && end) return `${file} p.${start}–${end}`;
                                     if (start) return `${file} p.${start}`;
                                     return file;
                                 }
 
-                                // Hide an unclosed trailing <docref ...  fragment that arrives mid-stream
-                                // so users never see raw docId / attribute text while the tag is incomplete.
                                 let processedContent = message.content?.replace(/<docref\b[^>]*$/i, '');
 
-                                processedContent = processedContent?.replace(/<docref([^>]*?)>(.*?)<\/docref>/gi, (match, attrs /* innerText ignored */) => {
+                                processedContent = processedContent?.replace(/<docref([^>]*?)>(.*?)<\/docref>/gi, (_match: string, attrs: string) => {
                                     const file = attrs.match(/file=(['"])(.*?)\1/)?.[2] || '';
                                     const docId = attrs.match(/docId=(['"])(.*?)\1/)?.[2] || attrs.match(/\bid=(['"])(.*?)\1/)?.[2];
                                     const { start, end } = extractPages(attrs);
 
                                     const params = new URLSearchParams();
                                     if (start) params.append('pageStart', start);
-                                    if (end)   params.append('pageEnd', end);
+                                    if (end) params.append('pageEnd', end);
                                     if (docId) params.append('docId', docId);
                                     const queryString = params.toString();
 
                                     const url = `#doc:${encodeURIComponent(file)}${queryString ? `?${queryString}` : ''}`;
                                     return `[${buildChipLabel(file, start, end)}](${url})`;
                                 });
-                                // Self-closing tag: <docref file="abc.pdf" page="12" />
-                                processedContent = processedContent?.replace(/<docref([^>]*?)\/>/gi, (match, attrs) => {
+                                processedContent = processedContent?.replace(/<docref([^>]*?)\/>/gi, (_match: string, attrs: string) => {
                                     const file = attrs.match(/file=(['"])(.*?)\1/)?.[2] || '';
                                     const docId = attrs.match(/docId=(['"])(.*?)\1/)?.[2] || attrs.match(/\bid=(['"])(.*?)\1/)?.[2];
                                     const { start, end } = extractPages(attrs);
 
                                     const params = new URLSearchParams();
                                     if (start) params.append('pageStart', start);
-                                    if (end)   params.append('pageEnd', end);
+                                    if (end) params.append('pageEnd', end);
                                     if (docId) params.append('docId', docId);
                                     const queryString = params.toString();
 
@@ -86,32 +86,31 @@ export default function ChatMessage({ message, showTimestamp = true, onDocumentC
                                 return (
                                     <ReactMarkdown
                                         components={{
-                                            a({ node, className, children, href, ...props }) {
+                                            a({ className, children, href, ...props }) {
                                                 if (href?.startsWith('#doc:')) {
                                                     const rawDoc = href.replace('#doc:', '');
                                                     const [encodedFilename, queryString] = rawDoc.split('?');
                                                     const filename = decodeURIComponent(encodedFilename);
-                                                    const ext = filename.split('.').pop().toLowerCase();
 
-                                                    let pageStart = null, pageEnd = null, docId = null;
+                                                    let pageStart: string | null = null, pageEnd: string | null = null, docId: string | null = null;
                                                     if (queryString) {
                                                         const params = new URLSearchParams(queryString);
                                                         pageStart = params.get('pageStart');
-                                                        pageEnd   = params.get('pageEnd');
-                                                        docId     = params.get('docId');
+                                                        pageEnd = params.get('pageEnd');
+                                                        docId = params.get('docId');
                                                     }
 
-                                                    // Color scheme by file type
-                                                    const styleMap = {
-                                                        pdf:  { btn: 'bg-white hover:bg-orange-100 text-orange-800 border-orange-300', icon: 'text-orange-600' },
-                                                        docx: { btn: 'bg-white hover:bg-blue-100 text-blue-800 border-blue-300',         icon: 'text-blue-600' },
-                                                        doc:  { btn: 'bg-white hover:bg-blue-100 text-blue-800 border-blue-300',         icon: 'text-blue-600' },
-                                                        xlsx: { btn: 'bg-white hover:bg-green-100 text-green-800 border-green-300',     icon: 'text-green-600' },
-                                                        xls:  { btn: 'bg-white hover:bg-green-100 text-green-800 border-green-300',     icon: 'text-green-600' },
-                                                        csv:  { btn: 'bg-white hover:bg-green-100 text-green-800 border-green-300',     icon: 'text-green-600' },
-                                                        tsv:  { btn: 'bg-white hover:bg-green-100 text-green-800 border-green-300',     icon: 'text-green-6<PASSWORD>' },
-                                                        txt:  { btn: 'bg-white hover:bg-gray-100 text-gray-700 border-gray-300',         icon: 'text-gray-500' },
-                                                        md:   { btn: 'bg-white hover:bg-purple-100 text-purple-800 border-purple-300', icon: 'text-purple-600' },
+                                                    const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+                                                    const styleMap: Record<string, { btn: string; icon: string }> = {
+                                                        pdf: { btn: 'bg-white hover:bg-orange-100 text-orange-800 border-orange-300', icon: 'text-orange-600' },
+                                                        docx: { btn: 'bg-white hover:bg-blue-100 text-blue-800 border-blue-300', icon: 'text-blue-600' },
+                                                        doc: { btn: 'bg-white hover:bg-blue-100 text-blue-800 border-blue-300', icon: 'text-blue-600' },
+                                                        xlsx: { btn: 'bg-white hover:bg-green-100 text-green-800 border-green-300', icon: 'text-green-600' },
+                                                        xls: { btn: 'bg-white hover:bg-green-100 text-green-800 border-green-300', icon: 'text-green-600' },
+                                                        csv: { btn: 'bg-white hover:bg-green-100 text-green-800 border-green-300', icon: 'text-green-600' },
+                                                        tsv: { btn: 'bg-white hover:bg-green-100 text-green-800 border-green-300', icon: 'text-green-600' },
+                                                        txt: { btn: 'bg-white hover:bg-gray-100 text-gray-700 border-gray-300', icon: 'text-gray-500' },
+                                                        md: { btn: 'bg-white hover:bg-purple-100 text-purple-800 border-purple-300', icon: 'text-purple-600' },
                                                     };
                                                     const style = styleMap[ext] ?? { btn: 'bg-white hover:bg-blue-200 text-blue-800 border-blue-300', icon: 'text-blue-600' };
 
@@ -130,9 +129,9 @@ export default function ChatMessage({ message, showTimestamp = true, onDocumentC
                                                 }
                                                 return <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline" {...props}>{children}</a>;
                                             },
-                                            code({ node, inline, className, children, ...props }) {
+                                            code({ className, children, ...props }) {
                                                 const match = /language-(\w+)/.exec(className || '')
-                                                return !inline && match ? (
+                                                return match ? (
                                                     <div className="rounded-md bg-gray-800 p-2 my-2 overflow-x-auto text-xs text-white">
                                                         <code className={className} {...props}>
                                                             {children}
@@ -150,19 +149,16 @@ export default function ChatMessage({ message, showTimestamp = true, onDocumentC
                                     </ReactMarkdown>
                                 );
                             })()}
-                        </div >
-                    </div >
+                        </div>
+                    </div>
 
-    {/* Timestamp - show on hover */ }
-{
-    showTimestamp && (
-        <span className="text-xs text-text-muted opacity-0 group-hover:opacity-100 transition-opacity px-4">
-            {timestamp}
-        </span>
-    )
-}
-                </div >
-            </div >
-        </div >
+                    {showTimestamp && (
+                        <span className="text-xs text-text-muted opacity-0 group-hover:opacity-100 transition-opacity px-4">
+                            {timestamp}
+                        </span>
+                    )}
+                </div>
+            </div>
+        </div>
     );
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { FiChevronRight } from 'react-icons/fi';
 
-function formatDuration(ms) {
+function formatDuration(ms?: number | null): string | null {
     if (ms === null || ms === undefined) return null;
     const totalSec = Math.max(0, Math.round(ms / 1000));
     const m = Math.floor(totalSec / 60);
@@ -10,7 +10,12 @@ function formatDuration(ms) {
     return `${totalSec}s`;
 }
 
-export default function ThinkingBlock({ content, duration }) {
+interface ThinkingBlockProps {
+    content: string;
+    duration?: number | null;
+}
+
+export default function ThinkingBlock({ content, duration }: ThinkingBlockProps) {
     const [expanded, setExpanded] = useState(false);
 
     // content===null means this message has no thinking at all — don't render

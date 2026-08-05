@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type JSX } from 'react';
 
 const SIZE = 18;
 const STROKE = 2;
@@ -46,21 +46,35 @@ function FailedIcon() {
     );
 }
 
-const iconMap = {
+type StepStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+export interface AgentStep {
+    id: string;
+    label: string;
+    status: StepStatus;
+    isSubstep?: boolean;
+}
+
+const iconMap: Record<StepStatus, () => JSX.Element> = {
     pending: PendingIcon,
     processing: SpinnerIcon,
     completed: CompletedIcon,
     failed: FailedIcon,
 };
 
-const textClassMap = {
+const textClassMap: Record<StepStatus, string> = {
     pending: 'text-text-muted',
     processing: 'text-text-primary font-medium',
     completed: 'text-text-primary',
     failed: 'text-red-500',
 };
 
-export default function AgentTaskList({ steps, agentName }) {
+interface AgentTaskListProps {
+    steps: AgentStep[];
+    agentName: string;
+}
+
+export default function AgentTaskList({ steps, agentName }: AgentTaskListProps) {
     const [collapsed, setCollapsed] = useState(false);
 
     const allDone = steps.length > 0 && steps.every(s => s.status === 'completed' || s.status === 'failed');

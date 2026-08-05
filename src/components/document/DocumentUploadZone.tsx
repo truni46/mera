@@ -1,5 +1,4 @@
-// src/components/DocumentUploadZone.jsx
-import { useState, useRef, useCallback, useEffect, useId } from 'react';
+import { useState, useRef, useCallback, useEffect, useId, type DragEvent } from 'react';
 import { FiUploadCloud, FiCheck, FiAlertCircle, FiPause, FiPlay, FiX } from 'react-icons/fi';
 import { CgSpinner } from 'react-icons/cg';
 import documentService from '../../services/documentService';
@@ -9,11 +8,32 @@ const ACCEPTED = '.pdf,.txt,.md,.docx,.doc,.xlsx,.xls';
 const MAX_CONCURRENT = 3;
 const POLL_INTERVAL = 2000;
 
-function sleep(ms) {
+function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function FileProgressItem({ item, onPause, onResume, onCancel }) {
+type UploadPhase = 'upload' | 'index';
+type UploadStatus = 'queued' | 'uploading' | 'indexing' | 'paused' | 'done' | 'error';
+
+interface UploadItem {
+    id: string;
+    file: File;
+    progress: number;
+    indexProgress: number;
+    phase: UploadPhase;
+    status: UploadStatus;
+    documentId: string | null;
+    errorMessage: string | null;
+}
+
+interface FileProgressItemProps {
+    item: UploadItem;
+    onPause: (id: string) => void;
+    onResume: (id: string) => void;
+    onCancel: (id: string) => void;
+}
+
+function FileProgressItem({ item, onPause, onResume, onCancel }: FileProgressItemProps) {
     const isActive = item.status === 'uploading' || item.status === 'indexing';
     const isPaused = item.status === 'paused';
     const showControls = isActive || isPaused;
@@ -84,11 +104,10 @@ function FileProgressItem({ item, onPause, onResume, onCancel }) {
             </div>
             <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
                 <div
-                    className={`h-full rounded-full transition-all duration-300 ${
-                        item.status === 'error'
-                            ? 'bg-red-400'
-                            : 'bg-green-500'
-                    }`}
+                    className={`h-full rounded-full transition-all duration-300 ${item.status === 'error'
+                        ? 'bg-red-400'
+                        : 'bg-green-500'
+                        }`}
                     style={{ width: `${currentProgress}%` }}
                 />
             </div>
@@ -96,14 +115,18 @@ function FileProgressItem({ item, onPause, onResume, onCancel }) {
     );
 }
 
-export default function DocumentUploadZone({ onUploadComplete }) {
+interface DocumentUploadZoneProps {
+    onUploadComplete: () => void;
+}
+
+export default function DocumentUploadZone({ onUploadComplete }: DocumentUploadZoneProps) {
     const [dragOver, setDragOver] = useState(false);
-    const [uploadItems, setUploadItems] = useState([]);
+    const [uploadItems, setUploadItems] = useState<UploadItem[]>([]);
     const inputId = useId();
     const toast = useToast();
-    const xhrMapRef = useRef({});
-    const abortFlagsRef = useRef({});
-    const pauseFlagsRef = useRef({});
+    const xhrMapRef = useRef<Record<string, XMLHttpRequest>>({});
+    const abortFlagsRef = useRef<Record<string, boolean>>({});
+    const pauseFlagsRef = useRef<Record<string, boolean>>({});
 
     useEffect(() => {
         return () => {
@@ -114,15 +137,15 @@ export default function DocumentUploadZone({ onUploadComplete }) {
         };
     }, []);
 
-    const updateItem = useCallback((id, patch) => {
+    const updateItem = useCallback((id: string, patch: Partial<UploadItem>) => {
         setUploadItems(prev => prev.map(i => (i.id === id ? { ...i, ...patch } : i)));
     }, []);
 
-    const removeItem = useCallback((id) => {
+    const removeItem = useCallback((id: string) => {
         setUploadItems(prev => prev.filter(i => i.id !== id));
     }, []);
 
-    const handlePause = useCallback((id) => {
+    const handlePause = useCallback((id: string) => {
         pauseFlagsRef.current[id] = true;
         if (xhrMapRef.current[id]) {
             xhrMapRef.current[id].abort();
@@ -133,7 +156,7 @@ export default function DocumentUploadZone({ onUploadComplete }) {
         ));
     }, []);
 
-    const handleCancel = useCallback((id) => {
+    const handleCancel = useCallback((id: string) => {
         abortFlagsRef.current[id] = true;
         pauseFlagsRef.current[id] = false;
         if (xhrMapRef.current[id]) {
@@ -144,7 +167,7 @@ export default function DocumentUploadZone({ onUploadComplete }) {
     }, [removeItem]);
 
     const pollIndexingStatus = useCallback(
-        async (itemId, documentId) => {
+        async (itemId: string, documentId: string) => {
             try {
                 while (true) {
                     if (abortFlagsRef.current[itemId]) break;
@@ -179,7 +202,7 @@ export default function DocumentUploadZone({ onUploadComplete }) {
                 if (!abortFlagsRef.current[itemId]) {
                     updateItem(itemId, {
                         status: 'error',
-                        errorMessage: err.message || 'Polling failed',
+                        errorMessage: err instanceof Error ? err.message : 'Polling failed',
                     });
                 }
             } finally {
@@ -191,7 +214,7 @@ export default function DocumentUploadZone({ onUploadComplete }) {
     );
 
     const uploadFile = useCallback(
-        async item => {
+        async (item: UploadItem) => {
             updateItem(item.id, { status: 'uploading', progress: 0, phase: 'upload' });
             abortFlagsRef.current[item.id] = false;
             pauseFlagsRef.current[item.id] = false;
@@ -227,7 +250,7 @@ export default function DocumentUploadZone({ onUploadComplete }) {
                 if (!abortFlagsRef.current[item.id] && !pauseFlagsRef.current[item.id]) {
                     updateItem(item.id, {
                         status: 'error',
-                        errorMessage: err.message || 'Upload failed',
+                        errorMessage: err instanceof Error ? err.message : 'Upload failed',
                     });
                 }
             }
@@ -235,7 +258,7 @@ export default function DocumentUploadZone({ onUploadComplete }) {
         [updateItem, pollIndexingStatus],
     );
 
-    const handleResume = useCallback((id) => {
+    const handleResume = useCallback((id: string) => {
         pauseFlagsRef.current[id] = false;
         setUploadItems(prev => {
             const item = prev.find(i => i.id === id);
@@ -251,7 +274,7 @@ export default function DocumentUploadZone({ onUploadComplete }) {
     }, [uploadFile]);
 
     const processQueue = useCallback(
-        async items => {
+        async (items: UploadItem[]) => {
             for (let i = 0; i < items.length; i += MAX_CONCURRENT) {
                 await Promise.all(items.slice(i, i + MAX_CONCURRENT).map(uploadFile));
             }
@@ -260,8 +283,9 @@ export default function DocumentUploadZone({ onUploadComplete }) {
     );
 
     const handleFiles = useCallback(
-        files => {
-            const newItems = Array.from(files).map(file => ({
+        (files: FileList | null) => {
+            if (!files) return;
+            const newItems: UploadItem[] = Array.from(files).map(file => ({
                 id: Math.random().toString(36).slice(2),
                 file,
                 progress: 0,
@@ -278,7 +302,7 @@ export default function DocumentUploadZone({ onUploadComplete }) {
     );
 
     const onDrop = useCallback(
-        e => {
+        (e: DragEvent<HTMLLabelElement>) => {
             e.preventDefault();
             setDragOver(false);
             handleFiles(e.dataTransfer.files);
@@ -296,11 +320,10 @@ export default function DocumentUploadZone({ onUploadComplete }) {
                 }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={onDrop}
-                className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center gap-3 cursor-pointer transition-colors ${
-                    dragOver
-                        ? 'border-primary bg-primary/5'
-                        : 'border-gray-300 hover:border-primary/50'
-                }`}
+                className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center gap-3 cursor-pointer transition-colors ${dragOver
+                    ? 'border-primary bg-primary/5'
+                    : 'border-gray-300 hover:border-primary/50'
+                    }`}
             >
                 <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
                     <FiUploadCloud size={22} className="text-gray-500" />

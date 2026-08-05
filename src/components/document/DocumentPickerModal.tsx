@@ -1,21 +1,26 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import documentService from '../../services/documentService';
 import DocumentUploadZone from './DocumentUploadZone';
+import type { DocumentItem } from '../../types';
 
-function formatDate(dateStr) {
+function formatDate(dateStr?: string): string {
     if (!dateStr) return '';
     return new Date(dateStr).toLocaleString();
 }
 
-export default function DocumentPickerModal({ onConfirm, onClose, selectedIds = [] }) {
-    const [documents, setDocuments] = useState([]);
+interface DocumentPickerModalProps {
+    onConfirm: (docs: DocumentItem[]) => void;
+    onClose: () => void;
+    selectedIds?: string[];
+}
+
+export default function DocumentPickerModal({ onConfirm, onClose, selectedIds = [] }: DocumentPickerModalProps) {
+    const [documents, setDocuments] = useState<DocumentItem[]>([]);
     const [query, setQuery] = useState('');
     const [loading, setLoading] = useState(true);
     const [localSelected, setLocalSelected] = useState(new Set(selectedIds));
-    const cardRef = useRef(null);
-    const searchRef = useRef(null);
-    const navigate = useNavigate();
+    const cardRef = useRef<HTMLDivElement>(null);
+    const searchRef = useRef<HTMLInputElement>(null);
 
     const [isUploading, setIsUploading] = useState(false);
 
@@ -36,8 +41,8 @@ export default function DocumentPickerModal({ onConfirm, onClose, selectedIds = 
     }, []);
 
     useEffect(() => {
-        const handleClickOutside = (e) => {
-            if (cardRef.current && !cardRef.current.contains(e.target)) {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
                 onClose();
             }
         };
@@ -45,7 +50,7 @@ export default function DocumentPickerModal({ onConfirm, onClose, selectedIds = 
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [onClose]);
 
-    const toggleDoc = (docId) => {
+    const toggleDoc = (docId: string) => {
         setLocalSelected(prev => {
             const next = new Set(prev);
             if (next.has(docId)) next.delete(docId);
@@ -101,7 +106,7 @@ export default function DocumentPickerModal({ onConfirm, onClose, selectedIds = 
             <div className="overflow-y-auto flex-1">
                 {isUploading ? (
                     <div className="p-4">
-                        <DocumentUploadZone onUploadComplete={() => {}} />
+                        <DocumentUploadZone onUploadComplete={() => { }} />
                     </div>
                 ) : loading ? (
                     <div className="flex items-center justify-center py-10 text-gray-400 text-sm gap-2">
@@ -134,7 +139,7 @@ export default function DocumentPickerModal({ onConfirm, onClose, selectedIds = 
                                         <div className="flex-1 min-w-0">
                                             <p className="text-xs font-medium text-gray-800 truncate">{doc.filename}</p>
                                             <p className="text-xs text-gray-400 mt-0.5">
-                                                {doc.pageCount > 0 ? `${doc.pageCount} pages` : '... pages'}
+                                                {(doc.pageCount ?? 0) > 0 ? `${doc.pageCount} pages` : '... pages'}
                                                 {doc.createdAt ? ` · ${formatDate(doc.createdAt)}` : ''}
                                             </p>
                                         </div>
@@ -153,54 +158,54 @@ export default function DocumentPickerModal({ onConfirm, onClose, selectedIds = 
 
             {!isUploading && (
                 <>
-            <div className="border-t border-gray-100 px-3 py-2 flex items-center gap-2">
-                <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input
-                    ref={searchRef}
-                    type="text"
-                    value={query}
-                    onChange={e => setQuery(e.target.value)}
-                    placeholder="Search documents..."
-                    className="flex-1 text-xs outline-none text-gray-700 placeholder:text-gray-400 bg-transparent"
-                />
-                <button
-                    onClick={() => setIsUploading(true)}
-                    className="flex items-center gap-1 text-xs text-gray-500 border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 transition-colors flex-shrink-0"
-                >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                    </svg>
-                    Upload
-                </button>
-            </div>
+                    <div className="border-t border-gray-100 px-3 py-2 flex items-center gap-2">
+                        <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <input
+                            ref={searchRef}
+                            type="text"
+                            value={query}
+                            onChange={e => setQuery(e.target.value)}
+                            placeholder="Search documents..."
+                            className="flex-1 text-xs outline-none text-gray-700 placeholder:text-gray-400 bg-transparent"
+                        />
+                        <button
+                            onClick={() => setIsUploading(true)}
+                            className="flex items-center gap-1 text-xs text-gray-500 border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 transition-colors flex-shrink-0"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                            </svg>
+                            Upload
+                        </button>
+                    </div>
 
-            <div className="border-t border-gray-100 px-3 py-2 flex items-center justify-between">
-                <button
-                    onClick={handleConfirm}
-                    className="flex items-center gap-1.5 text-xs text-gray-700 hover:text-gray-900 transition-colors"
-                >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    <span>Add documents</span>
-                    {localSelected.size > 0 && (
-                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold">
-                            {localSelected.size}
-                        </span>
-                    )}
-                </button>
-                <button
-                    onClick={onClose}
-                    className="p-1.5 rounded-full hover:bg-gray-100 transition-colors text-gray-400"
-                    title="Close"
-                >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                    </svg>
-                </button>
-            </div>
+                    <div className="border-t border-gray-100 px-3 py-2 flex items-center justify-between">
+                        <button
+                            onClick={handleConfirm}
+                            className="flex items-center gap-1.5 text-xs text-gray-700 hover:text-gray-900 transition-colors"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            <span>Add documents</span>
+                            {localSelected.size > 0 && (
+                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold">
+                                    {localSelected.size}
+                                </span>
+                            )}
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="p-1.5 rounded-full hover:bg-gray-100 transition-colors text-gray-400"
+                            title="Close"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                            </svg>
+                        </button>
+                    </div>
                 </>
             )}
         </div>

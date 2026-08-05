@@ -1,9 +1,18 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, type KeyboardEvent, type ClipboardEvent } from 'react';
 import DropdownMenu from '../ui/DropdownMenu';
 import QuotaWidget from '../QuotaWidget';
 import DocumentPickerModal from '../document/DocumentPickerModal';
+import type { DocumentItem, QuotaStatus } from '../../types';
 
-const SLASH_COMMANDS = [
+interface SlashCommand {
+    [key: string]: unknown;
+    id: string;
+    label: string;
+    description: string;
+    command: string;
+}
+
+const SLASH_COMMANDS: SlashCommand[] = [
     { id: '/agents:research', label: '/agents:research', description: 'Search and gather information', command: '/agents:research' },
     { id: '/agents:plan', label: '/agents:plan', description: 'Create an execution plan', command: '/agents:plan' },
     { id: '/agents:implement', label: '/agents:implement', description: 'Write code or documents', command: '/agents:implement' },
@@ -11,7 +20,7 @@ const SLASH_COMMANDS = [
     { id: '/agents:browser', label: '/agents:browser', description: 'Automate browser actions', command: '/agents:browser' },
 ];
 
-function matchCommand(query) {
+function matchCommand(query: string): SlashCommand | undefined {
     const q = query.toLowerCase();
     return SLASH_COMMANDS.find(c => {
         const full = c.command.slice(1);
@@ -20,7 +29,7 @@ function matchCommand(query) {
     });
 }
 
-function filterCommands(query) {
+function filterCommands(query: string): SlashCommand[] {
     const q = query.toLowerCase();
     return SLASH_COMMANDS.filter(c => {
         const full = c.command.slice(1);
@@ -29,7 +38,7 @@ function filterCommands(query) {
     });
 }
 
-function getSlashCommand(text) {
+function getSlashCommand(text: string): { resolved: string; raw: string } | null {
     const match = text.match(/^(\/[\w:]+)/);
     if (!match) return null;
     const raw = match[1].slice(1);
@@ -38,12 +47,28 @@ function getSlashCommand(text) {
     return { resolved: found.command, raw: match[1] };
 }
 
-function getFileColorConfig(filename) {
-    const ext = filename?.split('.').pop().toLowerCase();
+function getFileColorConfig(filename?: string): { bg: string; icon: string } {
+    const ext = filename?.split('.').pop()?.toLowerCase();
     if (ext === 'doc' || ext === 'docx') return { bg: 'bg-blue-50 border-blue-100', icon: 'bg-[#0084FF]' };
     if (ext === 'xls' || ext === 'xlsx' || ext === 'csv') return { bg: 'bg-green-50 border-green-200', icon: 'bg-green-500' };
     if (ext === 'pdf') return { bg: 'bg-orange-50 border-orange-200', icon: 'bg-[#ff6b00]' };
     return { bg: 'bg-gray-100 border-gray-200', icon: 'bg-gray-500' };
+}
+
+type AttachedDoc = DocumentItem & { active?: boolean };
+
+interface ChatInputProps {
+    conversationId: string | null;
+    onSend: (message: string) => void;
+    disabled?: boolean;
+    quotaBlocked?: boolean;
+    quota?: QuotaStatus | null;
+    quotaWarning?: boolean;
+    selectedDocs?: AttachedDoc[];
+    onDocumentsConfirm: (docs: DocumentItem[]) => void;
+    onDocumentRemove: (docId: string) => void;
+    isStreaming?: boolean;
+    onStop: () => void;
 }
 
 export default function ChatInput({
@@ -58,10 +83,10 @@ export default function ChatInput({
     onDocumentRemove,
     isStreaming = false,
     onStop,
-}) {
+}: ChatInputProps) {
     const [message, setMessage] = useState('');
-    const [attachedDocs, setAttachedDocs] = useState([]);
-    const draftsRef = useRef({});
+    const [attachedDocs, setAttachedDocs] = useState<AttachedDoc[]>([]);
+    const draftsRef = useRef<Record<string, string>>({});
     const prevConvIdRef = useRef(conversationId);
 
     // If a doc is removed from the parent selectedDocs (e.g. via DocumentListPanel),
@@ -72,9 +97,9 @@ export default function ChatInput({
 
     useEffect(() => {
         if (prevConvIdRef.current !== conversationId) {
-            draftsRef.current[prevConvIdRef.current] = message;
+            draftsRef.current[prevConvIdRef.current ?? ''] = message;
 
-            const nextMessage = draftsRef.current[conversationId] || '';
+            const nextMessage = draftsRef.current[conversationId ?? ''] || '';
             setMessage(nextMessage);
             setAttachedDocs([]);
 
@@ -87,10 +112,10 @@ export default function ChatInput({
     }, [conversationId, message]);
 
     const [showCommands, setShowCommands] = useState(false);
-    const [filteredCommands, setFilteredCommands] = useState(SLASH_COMMANDS);
+    const [filteredCommands, setFilteredCommands] = useState<SlashCommand[]>(SLASH_COMMANDS);
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [showDocPicker, setShowDocPicker] = useState(false);
-    const editorRef = useRef(null);
+    const editorRef = useRef<HTMLDivElement>(null);
     const isComposing = useRef(false);
 
     useEffect(() => {
@@ -137,7 +162,7 @@ export default function ChatInput({
         renderHighlighted();
     }, [message, renderHighlighted]);
 
-    const selectCommand = (cmd) => {
+    const selectCommand = (cmd: SlashCommand) => {
         const newMsg = cmd.command + ' ';
         setMessage(newMsg);
         setShowCommands(false);
@@ -167,7 +192,7 @@ export default function ChatInput({
         }
     };
 
-    const handleKeyDown = (e) => {
+    const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
         if (isComposing.current) return;
 
         if (showCommands) {
@@ -207,7 +232,7 @@ export default function ChatInput({
         setMessage(text);
     };
 
-    const handlePaste = (e) => {
+    const handlePaste = (e: ClipboardEvent<HTMLDivElement>) => {
         e.preventDefault();
         const text = e.clipboardData.getData('text/plain');
         document.execCommand('insertText', false, text);
@@ -235,17 +260,17 @@ export default function ChatInput({
                                             </div>
                                             <div className="min-w-0 flex-1">
                                                 <p className="text-xs font-semibold text-gray-800 truncate leading-tight">{doc.filename}</p>
-                                            <p className="text-[10.5px] text-gray-500 mt-0.5">Document</p>
-                                        </div>
-                                        <button
-                                            onClick={() => onDocumentRemove(doc.id)}
-                                            className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-black text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:scale-110"
-                                            title={`Remove ${doc.filename}`}
-                                        >
-                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                                            </svg>
-                                        </button>
+                                                <p className="text-[10.5px] text-gray-500 mt-0.5">Document</p>
+                                            </div>
+                                            <button
+                                                onClick={() => onDocumentRemove(doc.id)}
+                                                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-black text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:scale-110"
+                                                title={`Remove ${doc.filename}`}
+                                            >
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
                                         </div>
                                     );
                                 })}
@@ -253,130 +278,129 @@ export default function ChatInput({
                         )}
 
                         <div className="flex items-center justify-center space-x-2 p-2">
-                        <div className="flex items-center gap-0.5 flex-shrink-0">
-                            <button
-                                onClick={() => setShowDocPicker(true)}
-                                className="p-2 hover:bg-bg-secondary rounded-full transition-colors"
-                                title="Add documents"
-                            >
-                                <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
-                            </button>
-                            {quota && <QuotaWidget quota={quota} warning={quotaWarning} inline />}
-                        </div>
-
-                        <div className="flex-1 relative pt-2">
-                            <DropdownMenu
-                                items={filteredCommands}
-                                selectedIndex={selectedIndex}
-                                visible={showCommands}
-                                position="top"
-                                onSelect={(item) => selectCommand(item)}
-                                onHover={(index) => setSelectedIndex(index)}
-                            />
-
-                            <div
-                                ref={editorRef}
-                                contentEditable={!disabled}
-                                onInput={handleInput}
-                                onKeyDown={handleKeyDown}
-                                onPaste={handlePaste}
-                                onCompositionStart={() => { isComposing.current = true; }}
-                                onCompositionEnd={() => { isComposing.current = false; handleInput(); }}
-                                data-placeholder="Say something..."
-                                className="chat-editor w-full bg-transparent text-sm md:text-[14.5px] leading-[1.5] text-text-primary resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] overflow-y-auto ml-1 mb-1 whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-text-muted"
-                                role="textbox"
-                                style={{ minHeight: '24px', lineHeight: 1.5 }}
-                            />
-                        </div>
-
-                        {quotaBlocked && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-3xl z-10">
-                                <span className="text-sm text-red-600 font-medium">
-                                    Quota exceeded. Please wait for reset.
-                                </span>
+                            <div className="flex items-center gap-0.5 flex-shrink-0">
+                                <button
+                                    onClick={() => setShowDocPicker(true)}
+                                    className="p-2 hover:bg-bg-secondary rounded-full transition-colors"
+                                    title="Add documents"
+                                >
+                                    <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                    </svg>
+                                </button>
+                                {quota && <QuotaWidget quota={quota} warning={quotaWarning} inline />}
                             </div>
-                        )}
 
-                        {isStreaming ? (
-                            <button
-                                onClick={onStop}
-                                className="flex-shrink-0 p-2 rounded-full bg-red-700 hover:bg-red-800 text-white shadow-sm transition-colors"
-                                title="Dừng phản hồi"
-                            >
-                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                    <rect x="6" y="6" width="12" height="12" rx="2" />
-                                </svg>
-                            </button>
-                        ) : (
-                            <button
-                                onClick={handleSend}
-                                disabled={!message.trim() || disabled}
-                                className={`flex-shrink-0 p-2 rounded-full transition-colors ${message.trim() && !disabled
-                                    ? 'bg-primary hover:bg-primary-dark text-white shadow-sm'
-                                    : 'bg-transparent text-text-muted cursor-not-allowed'
-                                }`}
-                                title={message.trim() ? "Send messages" : "Record"}
-                            >
-                                {message.trim() ? (
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                            <div className="flex-1 relative pt-2">
+                                <DropdownMenu<SlashCommand>
+                                    items={filteredCommands}
+                                    selectedIndex={selectedIndex}
+                                    visible={showCommands}
+                                    position="top"
+                                    onSelect={(item) => selectCommand(item)}
+                                    onHover={(index) => setSelectedIndex(index)}
+                                />
+
+                                <div
+                                    ref={editorRef}
+                                    contentEditable={!disabled}
+                                    onInput={handleInput}
+                                    onKeyDown={handleKeyDown}
+                                    onPaste={handlePaste}
+                                    onCompositionStart={() => { isComposing.current = true; }}
+                                    onCompositionEnd={() => { isComposing.current = false; handleInput(); }}
+                                    data-placeholder="Say something..."
+                                    className="chat-editor w-full bg-transparent text-sm md:text-[14.5px] leading-[1.5] text-text-primary resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] overflow-y-auto ml-1 mb-1 whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-text-muted"
+                                    role="textbox"
+                                    style={{ minHeight: '24px', lineHeight: 1.5 }}
+                                />
+                            </div>
+
+                            {quotaBlocked && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-3xl z-10">
+                                    <span className="text-sm text-red-600 font-medium">
+                                        Quota exceeded. Please wait for reset.
+                                    </span>
+                                </div>
+                            )}
+
+                            {isStreaming ? (
+                                <button
+                                    onClick={onStop}
+                                    className="flex-shrink-0 p-2 rounded-full bg-red-700 hover:bg-red-800 text-white shadow-sm transition-colors"
+                                    title="Dừng phản hồi"
+                                >
+                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                        <rect x="6" y="6" width="12" height="12" rx="2" />
                                     </svg>
-                                ) : (
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                                    </svg>
-                                )}
-                            </button>
-                        )}
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleSend}
+                                    disabled={!message.trim() || disabled}
+                                    className={`flex-shrink-0 p-2 rounded-full transition-colors ${message.trim() && !disabled
+                                        ? 'bg-primary hover:bg-primary-dark text-white shadow-sm'
+                                        : 'bg-transparent text-text-muted cursor-not-allowed'
+                                        }`}
+                                    title={message.trim() ? "Send messages" : "Record"}
+                                >
+                                    {message.trim() ? (
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                                        </svg>
+                                    ) : (
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                        </svg>
+                                    )}
+                                </button>
+                            )}
+                        </div>
                     </div>
+                </div>
+
+                <div className="mt-3 text-center text-xs md:text-sm text-text-muted font-medium opacity-80">
+                    Mera can make mistakes, please check the response.
                 </div>
             </div>
 
-            <div className="mt-3 text-center text-xs md:text-sm text-text-muted font-medium opacity-80">
-                Mera can make mistakes, please check the response.
-            </div>
+            {showDocPicker && (
+                <DocumentPickerModal
+                    onConfirm={(docs) => {
+                        onDocumentsConfirm(docs);
+                        setAttachedDocs(docs);
+                        setShowDocPicker(false);
+                    }}
+                    onClose={() => setShowDocPicker(false)}
+                    selectedIds={attachedDocs.map(d => d.id)}
+                />
+            )}
         </div>
-
-            {
-        showDocPicker && (
-            <DocumentPickerModal
-                onConfirm={(docs) => {
-                    onDocumentsConfirm(docs);
-                    setAttachedDocs(docs);
-                    setShowDocPicker(false);
-                }}
-                onClose={() => setShowDocPicker(false)}
-                selectedIds={attachedDocs.map(d => d.id)}
-            />
-        )
-    }
-        </div >
     );
 }
 
-function escapeHtml(text) {
+function escapeHtml(text: string): string {
     return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function getCaretOffset(el) {
+function getCaretOffset(el: HTMLElement): number {
     const sel = window.getSelection();
-    if (!sel.rangeCount) return 0;
+    if (!sel || !sel.rangeCount) return 0;
     const range = sel.getRangeAt(0).cloneRange();
     range.selectNodeContents(el);
     range.setEnd(sel.getRangeAt(0).endContainer, sel.getRangeAt(0).endOffset);
     return range.toString().length;
 }
 
-function restoreCaret(el, offset) {
+function restoreCaret(el: HTMLElement, offset: number): void {
     const sel = window.getSelection();
+    if (!sel) return;
     const range = document.createRange();
     let current = 0;
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    let node;
+    let node: Node | null;
     while ((node = walker.nextNode())) {
-        const len = node.textContent.length;
+        const len = node.textContent?.length ?? 0;
         if (current + len >= offset) {
             range.setStart(node, offset - current);
             range.collapse(true);
