@@ -1,5 +1,4 @@
-// src/components/ui/PDFViewer.jsx
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, type KeyboardEvent } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -13,7 +12,7 @@ const PAGE_BUFFER = 3;
 const PAGE_HEIGHT_ESTIMATE = 900;
 const DEBOUNCE_MS = 300;
 
-function PagePlaceholder({ width, height, pageNumber }) {
+function PagePlaceholder({ width, height, pageNumber }: { width: number; height: number; pageNumber: number }) {
     return (
         <div
             className="flex items-center justify-center bg-white"
@@ -29,23 +28,35 @@ function PagePlaceholder({ width, height, pageNumber }) {
     );
 }
 
-export default function PDFViewer({ fileUrl, initialPage = 1, scale = 1.0, onScaleChange }) {
-    const [numPages, setNumPages] = useState(null);
+interface PDFViewerProps {
+    fileUrl: string;
+    initialPage?: number;
+    scale?: number;
+    onScaleChange?: (scale: number) => void;
+}
+
+interface RenderRange {
+    start: number;
+    end: number;
+}
+
+export default function PDFViewer({ fileUrl, initialPage = 1, scale = 1.0, onScaleChange }: PDFViewerProps) {
+    const [numPages, setNumPages] = useState<number | null>(null);
     const [visiblePage, setVisiblePage] = useState(initialPage);
     const [pageInput, setPageInput] = useState('');
     const [zoomInput, setZoomInput] = useState(Math.round(scale * 100).toString());
-    const [renderRange, setRenderRange] = useState({ start: 1, end: 1 + PAGE_BUFFER * 2 });
-    const scrollContainerRef = useRef(null);
-    const observerRef = useRef(null);
-    const pageHeightsRef = useRef({});
-    const debounceTimerRef = useRef(null);
-    const pendingPageRef = useRef(null);
+    const [renderRange, setRenderRange] = useState<RenderRange>({ start: 1, end: 1 + PAGE_BUFFER * 2 });
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const observerRef = useRef<IntersectionObserver | null>(null);
+    const pageHeightsRef = useRef<Record<number, number>>({});
+    const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const pendingPageRef = useRef<number | null>(null);
     const scaleRef = useRef(scale);
     const visiblePageRef = useRef(initialPage);
     const prevScaleRef = useRef(scale);
     const hasScrolledRef = useRef(false);
 
-    const scrollToPage = useCallback((pageNum) => {
+    const scrollToPage = useCallback((pageNum: number) => {
         const pageElement = document.getElementById(`pdf-page-${pageNum}`);
         if (pageElement) {
             pageElement.scrollIntoView({ behavior: 'auto', block: 'start' });
@@ -67,7 +78,7 @@ export default function PDFViewer({ fileUrl, initialPage = 1, scale = 1.0, onSca
         });
     }, [scale, scrollToPage]);
 
-    const setScale = useCallback((updater) => {
+    const setScale = useCallback((updater: number | ((prev: number) => number)) => {
         if (!onScaleChange) return;
         const next = typeof updater === 'function' ? updater(scale) : updater;
         const clamped = Math.min(3.0, Math.max(0.2, parseFloat(next.toFixed(1))));
@@ -77,7 +88,7 @@ export default function PDFViewer({ fileUrl, initialPage = 1, scale = 1.0, onSca
     useEffect(() => {
         const container = scrollContainerRef.current;
         if (!container) return;
-        const handler = (e) => {
+        const handler = (e: WheelEvent) => {
             if (!e.ctrlKey) return;
             e.preventDefault();
             const delta = e.deltaY > 0 ? -0.1 : 0.1;
@@ -87,11 +98,12 @@ export default function PDFViewer({ fileUrl, initialPage = 1, scale = 1.0, onSca
         return () => container.removeEventListener('wheel', handler);
     }, [setScale]);
 
-    const updateRenderRangeDebounced = useCallback((pageNum, total) => {
+    const updateRenderRangeDebounced = useCallback((pageNum: number, total: number) => {
         pendingPageRef.current = pageNum;
         if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
         debounceTimerRef.current = setTimeout(() => {
             const p = pendingPageRef.current;
+            if (p === null) return;
             const newStart = Math.max(1, p - PAGE_BUFFER);
             const newEnd = Math.min(total, p + PAGE_BUFFER);
             setRenderRange(prev => {
@@ -102,7 +114,7 @@ export default function PDFViewer({ fileUrl, initialPage = 1, scale = 1.0, onSca
         }, DEBOUNCE_MS);
     }, []);
 
-    const onDocumentLoadSuccess = useCallback(({ numPages: total }) => {
+    const onDocumentLoadSuccess = useCallback(({ numPages: total }: { numPages: number }) => {
         setNumPages(total);
         const validPage = (!initialPage || isNaN(initialPage)) ? 1 : initialPage;
         const start = Math.max(1, validPage - PAGE_BUFFER);
@@ -133,7 +145,7 @@ export default function PDFViewer({ fileUrl, initialPage = 1, scale = 1.0, onSca
         };
     }, []);
 
-    const onPageLoadSuccess = useCallback((page) => {
+    const onPageLoadSuccess = useCallback((page: { pageNumber: number; height: number; width: number }) => {
         pageHeightsRef.current[page.pageNumber] = page.height * (700 * scaleRef.current / page.width);
         if (!isNaN(initialPage) && page.pageNumber === initialPage && !hasScrolledRef.current) {
             hasScrolledRef.current = true;
@@ -146,10 +158,10 @@ export default function PDFViewer({ fileUrl, initialPage = 1, scale = 1.0, onSca
         visiblePageRef.current = visiblePage;
     }, [visiblePage]);
 
-    const handlePageSubmit = (e) => {
+    const handlePageSubmit = (e: KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
             const p = parseInt(pageInput, 10);
-            if (!isNaN(p) && p >= 1 && p <= numPages) {
+            if (!isNaN(p) && p >= 1 && numPages !== null && p <= numPages) {
                 if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
                 const start = Math.max(1, p - PAGE_BUFFER);
                 const end = Math.min(numPages, p + PAGE_BUFFER);
@@ -161,7 +173,7 @@ export default function PDFViewer({ fileUrl, initialPage = 1, scale = 1.0, onSca
         }
     };
 
-    const handleZoomSubmit = (e) => {
+    const handleZoomSubmit = (e: KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
             const z = parseInt(zoomInput, 10);
             if (!isNaN(z) && z >= 20 && z <= 500) {
@@ -181,7 +193,7 @@ export default function PDFViewer({ fileUrl, initialPage = 1, scale = 1.0, onSca
 
         const visibilityObserver = new IntersectionObserver(
             (entries) => {
-                let latestPage = null;
+                let latestPage: number | null = null;
                 entries.forEach(entry => {
                     if (entry.isIntersecting) {
                         const pageNum = parseInt(entry.target.id.replace('pdf-page-', ''), 10);
@@ -218,11 +230,11 @@ export default function PDFViewer({ fileUrl, initialPage = 1, scale = 1.0, onSca
 
     const pageWidth = 700 * scale;
 
-    const shouldRenderPage = useCallback((pageNum) => {
+    const shouldRenderPage = useCallback((pageNum: number) => {
         return pageNum >= renderRange.start && pageNum <= renderRange.end;
     }, [renderRange]);
 
-    const getPageHeight = useCallback((pageNum) => {
+    const getPageHeight = useCallback((pageNum: number) => {
         return pageHeightsRef.current[pageNum] || PAGE_HEIGHT_ESTIMATE * scale;
     }, [scale]);
 

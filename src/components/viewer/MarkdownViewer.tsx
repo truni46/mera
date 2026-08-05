@@ -2,9 +2,13 @@ import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useDelayedSpinner } from '../../hooks/useDelayedSpinner';
 
-export default function MarkdownViewer({ fileUrl }) {
-    const [content, setContent] = useState(null);
-    const [error, setError] = useState(null);
+interface MarkdownViewerProps {
+    fileUrl: string;
+}
+
+export default function MarkdownViewer({ fileUrl }: MarkdownViewerProps) {
+    const [content, setContent] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
     const showSpinner = useDelayedSpinner(content === null && !error);
 
     useEffect(() => {

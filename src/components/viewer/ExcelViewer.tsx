@@ -2,10 +2,19 @@ import { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { useDelayedSpinner } from '../../hooks/useDelayedSpinner';
 
-export default function ExcelViewer({ fileUrl }) {
-    const [sheets, setSheets] = useState(null);
+interface Sheet {
+    name: string;
+    rows: unknown[][];
+}
+
+interface ExcelViewerProps {
+    fileUrl: string;
+}
+
+export default function ExcelViewer({ fileUrl }: ExcelViewerProps) {
+    const [sheets, setSheets] = useState<Sheet[] | null>(null);
     const [activeSheet, setActiveSheet] = useState(0);
-    const [error, setError] = useState(null);
+    const [error, setError] = useState<string | null>(null);
     const showSpinner = useDelayedSpinner(sheets === null && !error);
 
     useEffect(() => {
@@ -17,9 +26,9 @@ export default function ExcelViewer({ fileUrl }) {
             .then(res => res.arrayBuffer())
             .then(buf => {
                 const workbook = XLSX.read(buf, { type: 'array' });
-                const parsed = workbook.SheetNames.map(name => ({
+                const parsed: Sheet[] = workbook.SheetNames.map(name => ({
                     name,
-                    rows: XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: '' }),
+                    rows: XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: '' }) as unknown[][],
                 }));
                 setSheets(parsed);
             })
@@ -56,9 +65,8 @@ export default function ExcelViewer({ fileUrl }) {
                 <div className="flex gap-1 px-4 pt-3 border-b border-gray-200 bg-gray-50 flex-shrink-0">
                     {sheets.map((sheet, i) => (
                         <button key={sheet.name} onClick={() => setActiveSheet(i)}
-                            className={`px-3 py-1.5 text-xs rounded-t border-b-2 transition-colors ${
-                                i === activeSheet ? 'border-primary text-primary font-medium bg-white' : 'border-transparent text-text-secondary hover:text-primary'
-                            }`}>{sheet.name}</button>
+                            className={`px-3 py-1.5 text-xs rounded-t border-b-2 transition-colors ${i === activeSheet ? 'border-primary text-primary font-medium bg-white' : 'border-transparent text-text-secondary hover:text-primary'
+                                }`}>{sheet.name}</button>
                     ))}
                 </div>
             )}

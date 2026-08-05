@@ -1,12 +1,19 @@
-import { useState, useEffect, useRef, useCallback, Component } from 'react';
+import { useState, useEffect, useRef, useCallback, Component, type ReactNode, type KeyboardEvent } from 'react';
 import { renderAsync } from 'docx-preview';
 import { useDelayedSpinner } from '../../hooks/useDelayedSpinner';
 
-class WordViewerErrorBoundary extends Component {
-    state = { hasError: false, error: null };
-    static getDerivedStateFromError(error) {
+interface WordViewerErrorBoundaryState {
+    hasError: boolean;
+    error: Error | null;
+}
+
+class WordViewerErrorBoundary extends Component<{ children: ReactNode }, WordViewerErrorBoundaryState> {
+    state: WordViewerErrorBoundaryState = { hasError: false, error: null };
+
+    static getDerivedStateFromError(error: Error): WordViewerErrorBoundaryState {
         return { hasError: true, error };
     }
+
     render() {
         if (this.state.hasError) {
             return (
@@ -22,21 +29,28 @@ class WordViewerErrorBoundary extends Component {
     }
 }
 
-function WordViewerInner({ fileUrl, initialPage = 1, scale = 1.0, onScaleChange }) {
-    const [error, setError] = useState(null);
+interface WordViewerProps {
+    fileUrl: string;
+    initialPage?: number;
+    scale?: number;
+    onScaleChange?: (scale: number) => void;
+}
+
+function WordViewerInner({ fileUrl, initialPage = 1, scale = 1.0, onScaleChange }: WordViewerProps) {
+    const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const [numPages, setNumPages] = useState(null);
+    const [numPages, setNumPages] = useState<number | null>(null);
     const [visiblePage, setVisiblePage] = useState(initialPage);
     const [pageInput, setPageInput] = useState('');
 
-    const containerRef = useRef(null);
-    const wrapperRef = useRef(null);
-    const scrollRef = useRef(null);
-    const observerRef = useRef(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const wrapperRef = useRef<HTMLDivElement>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const observerRef = useRef<IntersectionObserver | null>(null);
 
     const showSpinner = useDelayedSpinner(loading && !error);
 
-    const scrollToPage = useCallback((pageNum) => {
+    const scrollToPage = useCallback((pageNum: number) => {
         const el = document.getElementById(`docx-page-${pageNum}`);
         if (el) el.scrollIntoView({ behavior: 'auto', block: 'start' });
     }, []);
@@ -58,7 +72,7 @@ function WordViewerInner({ fileUrl, initialPage = 1, scale = 1.0, onScaleChange 
                 const buf = await res.arrayBuffer();
                 if (cancelled || !containerRef.current) return;
                 if (!buf || buf.byteLength === 0) throw new Error('Empty file');
-                await renderAsync(buf, containerRef.current, null, {
+                await renderAsync(buf, containerRef.current, undefined, {
                     inWrapper: true,
                     breakPages: true,
                     ignoreLastRenderedPageBreak: false,
@@ -97,7 +111,7 @@ function WordViewerInner({ fileUrl, initialPage = 1, scale = 1.0, onScaleChange 
     useEffect(() => {
         const container = scrollRef.current;
         if (!container || !onScaleChange) return;
-        const handler = (e) => {
+        const handler = (e: WheelEvent) => {
             if (!e.ctrlKey) return;
             e.preventDefault();
             const delta = e.deltaY > 0 ? -0.1 : 0.1;
@@ -116,7 +130,7 @@ function WordViewerInner({ fileUrl, initialPage = 1, scale = 1.0, onScaleChange 
 
         const obs = new IntersectionObserver(
             (entries) => {
-                let latest = null;
+                let latest: number | null = null;
                 entries.forEach(e => {
                     if (e.isIntersecting) {
                         const p = parseInt(e.target.id.replace('docx-page-', ''), 10);
@@ -143,10 +157,10 @@ function WordViewerInner({ fileUrl, initialPage = 1, scale = 1.0, onScaleChange 
         setPageInput(visiblePage.toString());
     }, [visiblePage]);
 
-    const handlePageSubmit = (e) => {
+    const handlePageSubmit = (e: KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
             const p = parseInt(pageInput, 10);
-            if (!isNaN(p) && p >= 1 && p <= numPages) {
+            if (!isNaN(p) && p >= 1 && numPages !== null && p <= numPages) {
                 scrollToPage(p);
             } else {
                 setPageInput(visiblePage.toString());
@@ -179,7 +193,7 @@ function WordViewerInner({ fileUrl, initialPage = 1, scale = 1.0, onScaleChange 
                 </div>
             </div>
 
-            {numPages > 0 && (
+            {numPages !== null && numPages > 0 && (
                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-gray-800/80 text-white pl-3 text-sm font-medium shadow-md backdrop-blur-sm z-10 transition-opacity flex items-center border border-gray-700 overflow-hidden" style={{ borderRadius: '20px' }}>
                     <span className="text-gray-300 mr-2 text-xs uppercase tracking-wider">Page</span>
                     <input
@@ -199,7 +213,7 @@ function WordViewerInner({ fileUrl, initialPage = 1, scale = 1.0, onScaleChange 
     );
 }
 
-export default function WordViewer(props) {
+export default function WordViewer(props: WordViewerProps) {
     return (
         <WordViewerErrorBoundary>
             <WordViewerInner {...props} />
