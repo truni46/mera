@@ -1,17 +1,26 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+const API_BASE_URL: string = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
 
-/**
- * API Service for making HTTP requests
- */
+interface RequestOptions extends RequestInit {
+    headers?: Record<string, string>;
+}
+
+interface ApiErrorBody {
+    detail?: string;
+    error?: string;
+    message?: string;
+}
+
 class APIService {
-    constructor(baseURL = API_BASE_URL) {
+    private baseURL: string;
+
+    constructor(baseURL: string = API_BASE_URL) {
         this.baseURL = baseURL;
     }
 
-    async request(endpoint, options = {}) {
+    async request<T = unknown>(endpoint: string, options: RequestOptions = {}): Promise<T> {
         const url = `${this.baseURL}${endpoint}`;
 
-        const config = {
+        const config: RequestOptions = {
             headers: {
                 'Content-Type': 'application/json',
                 ...options.headers,
@@ -19,9 +28,8 @@ class APIService {
             ...options
         };
 
-        // Add Auth Token
         const token = localStorage.getItem('accessToken');
-        if (token) {
+        if (token && config.headers) {
             config.headers['Authorization'] = `Bearer ${token}`;
         }
 
@@ -34,63 +42,56 @@ class APIService {
                     window.dispatchEvent(new Event('auth:unauthorized'));
                 }
 
-                const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+                const error: ApiErrorBody = await response.json().catch(() => ({ detail: 'Request failed' }));
                 throw new Error(error.detail || error.error || error.message || `HTTP ${response.status}`);
             }
 
-            // Handle different response types
             const contentType = response.headers.get('content-type');
             if (contentType && contentType.includes('application/json')) {
-                return await response.json();
+                return await response.json() as T;
             }
 
-            return await response.text();
+            return await response.text() as unknown as T;
         } catch (error) {
             console.error(`API Error [${endpoint}]:`, error);
             throw error;
         }
     }
 
-    // GET request
-    async get(endpoint) {
-        return this.request(endpoint, { method: 'GET' });
+    async get<T = unknown>(endpoint: string): Promise<T> {
+        return this.request<T>(endpoint, { method: 'GET' });
     }
 
-    // POST request
-    async post(endpoint, data) {
-        return this.request(endpoint, {
+    async post<T = unknown>(endpoint: string, data?: unknown): Promise<T> {
+        return this.request<T>(endpoint, {
             method: 'POST',
             body: JSON.stringify(data),
         });
     }
 
-    // PUT request
-    async put(endpoint, data) {
-        return this.request(endpoint, {
+    async put<T = unknown>(endpoint: string, data?: unknown): Promise<T> {
+        return this.request<T>(endpoint, {
             method: 'PUT',
             body: JSON.stringify(data),
         });
     }
 
-    // PATCH request
-    async patch(endpoint, data) {
-        return this.request(endpoint, {
+    async patch<T = unknown>(endpoint: string, data?: unknown): Promise<T> {
+        return this.request<T>(endpoint, {
             method: 'PATCH',
             body: JSON.stringify(data),
         });
     }
 
-    // DELETE request
-    async delete(endpoint) {
-        return this.request(endpoint, { method: 'DELETE' });
+    async delete<T = unknown>(endpoint: string): Promise<T> {
+        return this.request<T>(endpoint, { method: 'DELETE' });
     }
 
-    // Download file
-    async download(endpoint, filename) {
+    async download(endpoint: string, filename: string): Promise<void> {
         try {
             const token = localStorage.getItem('accessToken');
-            const config = { headers: {} };
-            if (token) {
+            const config: RequestOptions = { headers: {} };
+            if (token && config.headers) {
                 config.headers['Authorization'] = `Bearer ${token}`;
             }
 
@@ -106,7 +107,6 @@ class APIService {
 
             const blob = await response.blob();
 
-            // Create download link
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;

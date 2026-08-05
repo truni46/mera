@@ -1,39 +1,45 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+import type { QuotaStatus } from '../types';
 
-/**
- * Server-Sent Events (SSE) Streaming Service
- */
+const API_BASE_URL: string = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+
+interface Source {
+    filename: string;
+    pageNumber?: number;
+}
+
+type OnChunk = (chunk: string) => void;
+type OnComplete = (fullResponse: string) => void;
+type OnError = (error: Error) => void;
+type OnAgentTask = (taskId: string) => void;
+type OnQuota = (quota: QuotaStatus, isExceeded: boolean) => void;
+type OnSources = (sources: Source[]) => void;
+type OnTitle = (title: string) => void;
+type OnThinking = (chunk: string) => void;
+
 class StreamingService {
-    constructor() {
-        this.eventSource = null;
-        this._abortController = null;
-    }
+    private _abortController: AbortController | null = null;
 
-    /**
-     * Send message and receive streaming response
-     * @param {string} message User message
-     * @param {string} conversationId Conversation ID
-     * @param {Function} onChunk Callback for each chunk
-     * @param {Function} onComplete Callback when complete
-     * @param {Function} onError Callback on error
-     * @param {Function} onAgentTask Callback when agent task is triggered
-     * @param {Function} onQuota Callback for quota events (quota object, isExceeded)
-     * @param {Array|null} documentIds Document IDs for RAG
-     * @param {Function|null} onSources Callback for source citations
-     */
-    async sendMessage(message, conversationId, onChunk, onComplete, onError, onAgentTask, onQuota, documentIds = null, onSources = null, onTitle = null, onThinking = null) {
+    async sendMessage(
+        message: string,
+        conversationId: string | null,
+        onChunk: OnChunk,
+        onComplete: OnComplete,
+        onError: OnError,
+        onAgentTask: OnAgentTask,
+        onQuota: OnQuota,
+        documentIds: string[] | null = null,
+        onSources: OnSources | null = null,
+        onTitle: OnTitle | null = null,
+        onThinking: OnThinking | null = null
+    ): Promise<void> {
         try {
             this._abortController = new AbortController();
 
             const token = localStorage.getItem('accessToken');
-            const headers = {
-                'Content-Type': 'application/json',
-            };
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
-            }
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
 
-            const payload = { message, conversationId };
+            const payload: { message: string; conversationId: string | null; documentIds?: string[] } = { message, conversationId };
             if (documentIds && documentIds.length > 0) {
                 payload.documentIds = documentIds;
             }
@@ -48,6 +54,9 @@ class StreamingService {
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
+            if (!response.body) {
+                throw new Error('No response body');
+            }
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
@@ -56,13 +65,11 @@ class StreamingService {
             while (true) {
                 const { done, value } = await reader.read();
 
-                if (done) {
-                    break;
-                }
+                if (done) break;
 
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n\n');
-                buffer = lines.pop(); // Keep incomplete line in buffer
+                buffer = lines.pop() ?? '';
 
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {
@@ -100,11 +107,11 @@ class StreamingService {
                                 if (data.quota && onQuota) {
                                     onQuota(data.quota, false);
                                 }
-                                let finalResponse = data.fullResponse || '';
+                                let finalResponse: string = data.fullResponse || '';
                                 if (data.sources && data.sources.length > 0) {
                                     if (onSources) onSources(data.sources);
-                                    const seen = new Set();
-                                    const unique = data.sources.filter(s => {
+                                    const seen = new Set<string>();
+                                    const unique: Source[] = data.sources.filter((s: Source) => {
                                         if (!s.filename) return false;
                                         const key = `${s.filename}|${s.pageNumber ?? ''}`;
                                         if (seen.has(key)) return false;
@@ -112,12 +119,12 @@ class StreamingService {
                                         return true;
                                     });
                                     if (unique.length > 0) {
-                                        const lines = unique.map(s => {
+                                        const refLines = unique.map(s => {
                                             const pageAttr = s.pageNumber ? ` page="${s.pageNumber}"` : '';
                                             const label = s.pageNumber ? `${s.filename} (trang ${s.pageNumber})` : s.filename;
                                             return `<docref file="${s.filename}"${pageAttr}>${label}</docref>`;
                                         });
-                                        finalResponse += '\n\n---\n**Nguồn tham khảo:**\n' + lines.join('\n');
+                                        finalResponse += '\n\n---\n**Nguồn tham khảo:**\n' + refLines.join('\n');
                                     }
                                 }
                                 onComplete(finalResponse);
@@ -129,26 +136,19 @@ class StreamingService {
                 }
             }
         } catch (error) {
-            if (error.name !== 'AbortError') {
+            if (!(error instanceof Error && error.name === 'AbortError')) {
                 console.error('Streaming error:', error);
             }
-            onError(error);
+            onError(error instanceof Error ? error : new Error(String(error)));
         } finally {
             this._abortController = null;
         }
     }
 
-    /**
-     * Cancel ongoing stream
-     */
-    cancel() {
+    cancel(): void {
         if (this._abortController) {
             this._abortController.abort();
             this._abortController = null;
-        }
-        if (this.eventSource) {
-            this.eventSource.close();
-            this.eventSource = null;
         }
     }
 }

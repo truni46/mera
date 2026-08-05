@@ -1,8 +1,20 @@
-// src/services/documentService.js
 import apiService from './apiService';
+import type { DocumentItem } from '../types';
+
+type ProgressCallback = (percent: number) => void;
+type XhrCallback = (xhr: XMLHttpRequest) => void;
+
+interface ApiError extends Error {
+    status?: number;
+}
 
 class DocumentService {
-    uploadDocuments(files, onProgress, scope = 'personal', onXhr) {
+    uploadDocuments(
+        files: File[],
+        onProgress?: ProgressCallback,
+        scope = 'personal',
+        onXhr?: XhrCallback
+    ): Promise<DocumentItem[]> {
         return new Promise((resolve, reject) => {
             const formData = new FormData();
             files.forEach(file => formData.append('files', file));
@@ -35,29 +47,29 @@ class DocumentService {
 
             const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
             xhr.open('POST', `${baseUrl}/knowledge/documents/upload?scope=${scope}`);
-            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
             xhr.send(formData);
         });
     }
 
-    async getDocuments(scope = null) {
+    async getDocuments(scope: string | null = null): Promise<DocumentItem[]> {
         const params = scope ? `?scope=${scope}` : '';
-        return apiService.get(`/knowledge/documents${params}`);
+        return apiService.get<DocumentItem[]>(`/knowledge/documents${params}`);
     }
 
-    async getDocument(documentId) {
-        return apiService.get(`/knowledge/documents/${documentId}`);
+    async getDocument(documentId: string): Promise<DocumentItem> {
+        return apiService.get<DocumentItem>(`/knowledge/documents/${documentId}`);
     }
 
-    async getDocumentFileUrl(documentId) {
+    async getDocumentFileUrl(documentId: string): Promise<string> {
         const token = localStorage.getItem('accessToken');
         const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
         const response = await fetch(
             `${baseUrl}/knowledge/documents/${documentId}/file`,
-            { headers: { Authorization: `Bearer ${token}` } }
+            { headers: token ? { Authorization: `Bearer ${token}` } : {} }
         );
         if (response.status === 404) {
-            const err = new Error('Document not found');
+            const err: ApiError = new Error('Document not found');
             err.status = 404;
             throw err;
         }
@@ -66,11 +78,11 @@ class DocumentService {
         return URL.createObjectURL(blob);
     }
 
-    async getDocumentOcrText(documentId) {
+    async getDocumentOcrText(documentId: string): Promise<unknown> {
         return apiService.get(`/knowledge/documents/${documentId}/ocr`);
     }
 
-    async deleteDocument(documentId) {
+    async deleteDocument(documentId: string): Promise<void> {
         return apiService.delete(`/knowledge/documents/${documentId}`);
     }
 }

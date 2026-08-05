@@ -1,16 +1,35 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+const API_BASE_URL: string = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+
+export interface AgentRunEvent {
+    type: 'agent_run';
+    agentType: string;
+    output?: {
+        event?: string;
+        tasks?: { description?: string }[];
+        taskIndex?: number;
+        [key: string]: unknown;
+    };
+}
+
+export interface AgentDoneEvent {
+    type: 'done';
+    finalReport?: string;
+    [key: string]: unknown;
+}
+
+type OnAgentRun = (event: AgentRunEvent) => void;
+type OnDone = (event: AgentDoneEvent) => void;
+type OnError = (error: Error) => void;
 
 class AgentStreamService {
-    constructor() {
-        this.abortController = null;
-    }
+    private abortController: AbortController | null = null;
 
-    async startTask(goal, conversationId) {
+    async startTask(goal: string, conversationId?: string): Promise<{ id: string; [key: string]: unknown }> {
         const token = localStorage.getItem('accessToken');
-        const headers = { 'Content-Type': 'application/json' };
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const body = { goal };
+        const body: { goal: string; conversationId?: string } = { goal };
         if (conversationId) body.conversationId = conversationId;
 
         const response = await fetch(`${API_BASE_URL}/agents/tasks`, {
@@ -27,11 +46,11 @@ class AgentStreamService {
         return response.json();
     }
 
-    async streamTask(taskId, onAgentRun, onDone, onError) {
+    async streamTask(taskId: string, onAgentRun: OnAgentRun, onDone: OnDone, onError: OnError): Promise<void> {
         try {
             this.abortController = new AbortController();
             const token = localStorage.getItem('accessToken');
-            const headers = {};
+            const headers: Record<string, string> = {};
             if (token) headers['Authorization'] = `Bearer ${token}`;
 
             const response = await fetch(`${API_BASE_URL}/agents/tasks/${taskId}/stream`, {
@@ -42,6 +61,9 @@ class AgentStreamService {
 
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
+            }
+            if (!response.body) {
+                throw new Error('No response body');
             }
 
             const reader = response.body.getReader();
@@ -54,7 +76,7 @@ class AgentStreamService {
 
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n\n');
-                buffer = lines.pop();
+                buffer = lines.pop() ?? '';
 
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {
@@ -77,13 +99,13 @@ class AgentStreamService {
                 }
             }
         } catch (error) {
-            if (error.name !== 'AbortError') {
+            if (error instanceof Error && error.name !== 'AbortError') {
                 onError(error);
             }
         }
     }
 
-    cancel() {
+    cancel(): void {
         if (this.abortController) {
             this.abortController.abort();
             this.abortController = null;
