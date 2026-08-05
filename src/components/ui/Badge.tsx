@@ -1,7 +1,8 @@
-// src/components/ui/Badge.jsx
-import React from 'react';
+import type { ReactNode } from 'react';
 
-const VARIANTS = {
+type BadgeVariant = 'default' | 'primary' | 'success' | 'error' | 'warning';
+
+const VARIANTS: Record<BadgeVariant, string> = {
     default: 'bg-gray-100 text-gray-600',
     primary: 'bg-blue-100 text-blue-600',
     success: 'bg-green-100 text-green-700',
@@ -9,12 +10,19 @@ const VARIANTS = {
     warning: 'bg-yellow-100 text-yellow-700'
 };
 
-export default function Badge({ 
-    children, 
-    variant = 'default', 
-    showSpinner = false, 
-    className = '' 
-}) {
+interface BadgeProps {
+    children: ReactNode;
+    variant?: BadgeVariant;
+    showSpinner?: boolean;
+    className?: string;
+}
+
+export default function Badge({
+    children,
+    variant = 'default',
+    showSpinner = false,
+    className = ''
+}: BadgeProps) {
     const baseClass = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium';
     const variantClass = VARIANTS[variant] || VARIANTS.default;
 

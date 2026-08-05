@@ -1,6 +1,16 @@
-// src/components/ui/ConfirmDialog.jsx
 import { useEffect, useRef } from 'react';
 import { HiExclamationTriangle } from 'react-icons/hi2';
+
+interface ConfirmDialogProps {
+    open: boolean;
+    title?: string;
+    description?: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+    variant?: 'danger' | 'primary';
+}
 
 export default function ConfirmDialog({
     open,
@@ -11,8 +21,8 @@ export default function ConfirmDialog({
     onConfirm,
     onCancel,
     variant = 'danger',
-}) {
-    const dialogRef = useRef(null);
+}: ConfirmDialogProps) {
+    const dialogRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (open) {
@@ -22,7 +32,7 @@ export default function ConfirmDialog({
 
     useEffect(() => {
         if (!open) return;
-        const handler = (e) => {
+        const handler = (e: KeyboardEvent) => {
             if (e.key === 'Escape') onCancel();
         };
         window.addEventListener('keydown', handler);

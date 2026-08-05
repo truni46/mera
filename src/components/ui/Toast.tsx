@@ -1,7 +1,7 @@
-import React from 'react';
 import { HiCheckCircle, HiExclamationCircle, HiXCircle } from 'react-icons/hi';
+import type { Toast, ToastType } from '../../context/ToastContext';
 
-const TOAST_CONFIG = {
+const TOAST_CONFIG: Record<ToastType, { icon: typeof HiCheckCircle; iconClass: string }> = {
     success: {
         icon: HiCheckCircle,
         iconClass: 'text-green-500',
@@ -16,7 +16,7 @@ const TOAST_CONFIG = {
     },
 };
 
-function ToastItem({ toast, onDismiss }) {
+function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string) => void }) {
     const config = TOAST_CONFIG[toast.type] || TOAST_CONFIG.info;
     const Icon = config.icon;
     const animationClass = toast.isExiting ? 'animate-toast-out' : 'animate-toast-in';
@@ -38,7 +38,12 @@ function ToastItem({ toast, onDismiss }) {
     );
 }
 
-export default function ToastContainer({ toasts, onDismiss }) {
+interface ToastContainerProps {
+    toasts: Toast[];
+    onDismiss: (id: string) => void;
+}
+
+export default function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
     if (!toasts || toasts.length === 0) return null;
 
     return (

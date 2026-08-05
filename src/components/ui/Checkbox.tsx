@@ -1,4 +1,14 @@
-export default function Checkbox({ checked, onChange, onClick, indeterminate = false, variant = 'default' }) {
+import type { ChangeEvent, MouseEvent } from 'react';
+
+interface CheckboxProps {
+    checked: boolean;
+    onChange: (e: ChangeEvent<HTMLInputElement>) => void;
+    onClick?: (e: MouseEvent<HTMLLabelElement>) => void;
+    indeterminate?: boolean;
+    variant?: 'default' | 'header';
+}
+
+export default function Checkbox({ checked, onChange, onClick, indeterminate = false, variant = 'default' }: CheckboxProps) {
     const isHeader = variant === 'header';
 
     const boxClass = indeterminate

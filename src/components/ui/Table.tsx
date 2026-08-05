@@ -1,7 +1,12 @@
-// src/components/ui/Table.jsx
-import React from 'react';
+import type { ReactNode, MouseEvent } from 'react';
 
-export default function Table({ headers = [], children, className = '' }) {
+interface TableProps {
+    headers?: ReactNode[];
+    children: ReactNode;
+    className?: string;
+}
+
+export default function Table({ headers = [], children, className = '' }: TableProps) {
     return (
         <div className={`overflow-x-auto w-full ${className}`}>
             <table className="w-full text-left border-separate border-spacing-0">
@@ -25,9 +30,15 @@ export default function Table({ headers = [], children, className = '' }) {
     );
 }
 
-export function TableRow({ children, className = '', onClick }) {
+interface TableRowProps {
+    children: ReactNode;
+    className?: string;
+    onClick?: (e: MouseEvent<HTMLTableRowElement>) => void;
+}
+
+export function TableRow({ children, className = '', onClick }: TableRowProps) {
     return (
-        <tr 
+        <tr
             className={`hover:bg-gray-50 transition-colors ${onClick ? 'cursor-pointer' : ''} ${className}`}
             onClick={onClick}
         >
@@ -36,7 +47,13 @@ export function TableRow({ children, className = '', onClick }) {
     );
 }
 
-export function TableCell({ children, className = '', isLast = false }) {
+interface TableCellProps {
+    children: ReactNode;
+    className?: string;
+    isLast?: boolean;
+}
+
+export function TableCell({ children, className = '', isLast = false }: TableCellProps) {
     return (
         <td className={`px-6 py-4 whitespace-nowrap ${isLast ? 'text-right' : ''} ${className}`}>
             {children}
