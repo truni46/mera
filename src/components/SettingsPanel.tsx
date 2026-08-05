@@ -1,11 +1,26 @@
 import { useState } from 'react';
 import SimpleMDE from 'react-simplemde-editor';
 import 'easymde/dist/easymde.min.css';
-import ModeSelector from './ModeSelector';
+import ModeSelector from './chat/ModeSelector';
 import ConnectionStatus from './ConnectionStatus';
 
-export default function SettingsPanel({ isOpen, onClose, settings, onSave, connectionStatus }) {
-    const [localSettings, setLocalSettings] = useState(settings);
+interface PanelSettings {
+    communication_mode: string;
+    show_timestamps: boolean;
+    welcome_message: string;
+    theme: string;
+}
+
+interface SettingsPanelProps {
+    isOpen: boolean;
+    onClose: () => void;
+    settings: PanelSettings;
+    onSave: (settings: PanelSettings) => void;
+    connectionStatus: string;
+}
+
+export default function SettingsPanel({ isOpen, onClose, settings, onSave, connectionStatus }: SettingsPanelProps) {
+    const [localSettings, setLocalSettings] = useState<PanelSettings>(settings);
 
     const handleSave = () => {
         onSave(localSettings);

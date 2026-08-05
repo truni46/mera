@@ -1,18 +1,31 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import type { User } from '../types';
 
-export default function UserMenu({ user }) {
+interface MenuItem {
+    label: string;
+    icon: ReactNode;
+    shortcut?: string;
+    hasSubmenu?: boolean;
+    onClick: () => void;
+}
+
+interface UserMenuProps {
+    user?: User | null;
+}
+
+export default function UserMenu({ user }: UserMenuProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-    const menuRef = useRef(null);
+    const menuRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
     const { logout } = useAuth();
 
     // Close on click outside
     useEffect(() => {
-        function handleClickOutside(e) {
-            if (menuRef.current && !menuRef.current.contains(e.target)) {
+        function handleClickOutside(e: MouseEvent) {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
                 setIsOpen(false);
             }
         }
@@ -24,7 +37,7 @@ export default function UserMenu({ user }) {
 
     // Close on Escape
     useEffect(() => {
-        function handleKey(e) {
+        function handleKey(e: KeyboardEvent) {
             if (e.key === 'Escape') setIsOpen(false);
         }
         if (isOpen) {
@@ -33,7 +46,7 @@ export default function UserMenu({ user }) {
         return () => document.removeEventListener('keydown', handleKey);
     }, [isOpen]);
 
-    const menuItems = [
+    const menuItems: MenuItem[] = [
         {
             label: 'Settings',
             icon: (

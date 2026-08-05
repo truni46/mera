@@ -1,5 +1,15 @@
-export default function ConnectionStatus({ status }) {
-    const statusConfig = {
+interface StatusConfig {
+    color: string;
+    text: string;
+    icon: string;
+}
+
+interface ConnectionStatusProps {
+    status: string;
+}
+
+export default function ConnectionStatus({ status }: ConnectionStatusProps) {
+    const statusConfig: Record<string, StatusConfig> = {
         connected: {
             color: 'bg-green-500',
             text: 'Connected',
@@ -23,6 +33,6 @@ export default function ConnectionStatus({ status }) {
         <div className="flex items-center space-x-2 text-xs text-text-secondary font-medium">
             <div className={`w-2 h-2 ${config.color} rounded-full ${status === 'connecting' ? 'animate-pulse' : ''}`}></div>
             <span>{config.text}</span>
-        </div >
+        </div>
     );
 }

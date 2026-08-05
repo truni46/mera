@@ -1,4 +1,9 @@
-export default function Topbar({ title, isNew }) {
+interface TopbarProps {
+    title: string;
+    isNew?: boolean;
+}
+
+export default function Topbar({ title, isNew }: TopbarProps) {
     return (
         <div className="flex-shrink-0 px-6 py-1">
             {!isNew && (

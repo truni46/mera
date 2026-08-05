@@ -3,6 +3,17 @@ import { Link, useLocation } from 'react-router-dom';
 import ConversationList from './chat/ConversationList';
 import UserMenu from './UserMenu';
 import logo from '../assets/logo.png';
+import type { ConversationSummary, User } from '../types';
+
+interface SidebarProps {
+    conversations?: ConversationSummary[];
+    activeConversationId?: string | null;
+    onNewChat?: () => void;
+    onSelectConversation?: (id: string) => void;
+    onDeleteConversation?: (id: string) => void;
+    user?: User | null;
+    deletingId?: string | null;
+}
 
 export default function Sidebar({
     conversations = [],
@@ -12,18 +23,16 @@ export default function Sidebar({
     onDeleteConversation = () => { },
     user,
     deletingId
-}) {
+}: SidebarProps) {
     const [isExpanded, setIsExpanded] = useState(true);
     const location = useLocation();
     const isDocumentsPage = location.pathname === '/documents';
 
     return (
-        <div className={`${isExpanded ? 'w-64' : 'w-16'} bg-sidebar border border-gray-300 flex flex-col transition-all duration-300 m-3 rounded-2xl overflow-hidden`}
->
-    {/* Header */ }
-    < div className = "p-3 flex items-center justify-between" >
-    {
-        isExpanded?(
+        <div className={`${isExpanded ? 'w-64' : 'w-16'} bg-sidebar border border-gray-300 flex flex-col transition-all duration-300 m-3 rounded-2xl overflow-hidden`}>
+            {/* Header */}
+            <div className="p-3 flex items-center justify-between">
+                {isExpanded ? (
                     <>
                         <div className="flex items-center space-x-2">
                             <img src={logo} alt="Logo" className="w-10 h-8 object-contain" />
@@ -39,59 +48,55 @@ export default function Sidebar({
                         </button>
                     </>
                 ) : (
-    <button
-        onClick={() => setIsExpanded(true)}
-        className="w-full p-1.5 hover:bg-bg-tertiary rounded-lg transition-colors flex justify-center"
-    >
-        <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-        </svg>
-    </button>
-)}
-            </div >
+                    <button
+                        onClick={() => setIsExpanded(true)}
+                        className="w-full p-1.5 hover:bg-bg-tertiary rounded-lg transition-colors flex justify-center"
+                    >
+                        <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                )}
+            </div>
 
-    {/* Sidebar Content */ }
-    < div className = "flex-1 flex flex-col" >
-    {
-        isExpanded?(
+            {/* Sidebar Content */}
+            <div className="flex-1 flex flex-col">
+                {isExpanded ? (
                     <>
-        {/* New Chat Button */ }
-        < div className = "p-3" >
-            <button
-                onClick={onNewChat}
-                className="w-full flex items-center space-x-3 px-2 py-2.5 rounded-lg border border-border hover:bg-bg-tertiary transition-colors text-text-primary"
-            >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                <span className="font-medium text-sm md:text-sm">New chat</span>
-            </button>
-                        </div >
+                        <div className="p-3">
+                            <button
+                                onClick={onNewChat}
+                                className="w-full flex items-center space-x-3 px-2 py-2.5 rounded-lg border border-border hover:bg-bg-tertiary transition-colors text-text-primary"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                                <span className="font-medium text-sm md:text-sm">New chat</span>
+                            </button>
+                        </div>
 
-    {/* Navigation Items */ }
-    < nav className = "px-3 space-y-1" >
-        <Link
-            to="/documents"
-            className={`w-full flex items-center space-x-3 px-2 py-2 rounded-lg transition-colors ${isDocumentsPage
-                ? 'bg-bg-tertiary text-text-primary'
-                : 'hover:bg-bg-tertiary text-text-secondary'
-            }`}
-                >
+                        <nav className="px-3 space-y-1">
+                            <Link
+                                to="/documents"
+                                className={`w-full flex items-center space-x-3 px-2 py-2 rounded-lg transition-colors ${isDocumentsPage
+                                    ? 'bg-bg-tertiary text-text-primary'
+                                    : 'hover:bg-bg-tertiary text-text-secondary'
+                                    }`}
+                            >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
                                 <span className="text-sm md:text-sm">Documents</span>
-                            </Link >
-    <button className="w-full flex items-center space-x-3 px-2 py-2 rounded-lg hover:bg-bg-tertiary transition-colors text-text-secondary">
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-        </svg>
-        <span className="text-sm md:text-sm">Library</span>
-    </button>
-                        </nav >
+                            </Link>
+                            <button className="w-full flex items-center space-x-3 px-2 py-2 rounded-lg hover:bg-bg-tertiary transition-colors text-text-secondary">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                </svg>
+                                <span className="text-sm md:text-sm">Library</span>
+                            </button>
+                        </nav>
 
-    {/* Chats Section */ }
-    < div className = "flex-1 mt-4 overflow-y-auto min-h-0 custom-scrollbar" >
+                        <div className="flex-1 mt-4 overflow-y-auto min-h-0 custom-scrollbar">
                             <div className="px-3 mb-2">
                                 <button className="w-full flex items-center justify-between text-text-secondary hover:text-text-primary transition-colors">
                                     <span className="text-xs md:text-sm font-medium text-gray-400 tracking-wide">Chats</span>
@@ -107,10 +112,9 @@ export default function Sidebar({
                                 onDelete={onDeleteConversation}
                                 deletingId={deletingId}
                             />
-                        </div >
+                        </div>
                     </>
                 ) : (
-                    /* Icon-only mode */
                     <div className="flex flex-col items-center space-y-2 p-2 mt-2">
                         <button
                             onClick={onNewChat}
@@ -138,18 +142,15 @@ export default function Sidebar({
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                             </svg>
                         </button>
-                    </div >
+                    </div>
                 )}
-            </div >
+            </div>
 
-    {/* User Profile - Bottom */ }
-{
-    isExpanded && (
-        <div className="px-2 py-1 border-t border-border">
-            <UserMenu user={user} />
+            {isExpanded && (
+                <div className="px-2 py-1 border-t border-border">
+                    <UserMenu user={user} />
+                </div>
+            )}
         </div>
-    )
-}
-        </div >
     );
 }
