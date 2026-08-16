@@ -29,6 +29,9 @@ server/data/*.json
 data/
 server/data/uploads/
 
+# Git worktrees
+.worktrees/
+
 # Runtime storage
 server/rag_storage/
 
