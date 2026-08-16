@@ -135,7 +135,7 @@ export default function ChatLayout() {
 
     if (isLoading) {
         return (
-            <div className="flex h-screen items-center justify-center bg-page">
+            <div className="flex h-screen items-center justify-center bg-app-bg">
                 <div className="text-center">
                     <h2 className="text-xl font-semibold text-primary">Loading...</h2>
                 </div>
@@ -148,7 +148,7 @@ export default function ChatLayout() {
     }
 
     return (
-        <div className="flex h-screen bg-page text-text-primary">
+        <div className="flex h-screen bg-app-bg text-text-primary">
             <Sidebar
                 conversations={conversations}
                 activeConversationId={activeConversationId}
@@ -159,7 +159,7 @@ export default function ChatLayout() {
                 deletingId={deletingId}
             />
 
-            <div className="flex-1 flex flex-col h-full overflow-hidden bg-page relative">
+            <div className="flex-1 flex flex-col h-full overflow-hidden relative">
                 <ToastContainer toasts={toasts} onDismiss={dismiss} />
                 <Outlet context={{
                     activeConversationId,

@@ -26,9 +26,9 @@ export default function ChatMessage({ message, showTimestamp = true, onDocumentC
                         <ThinkingBlock content={message.thinking} duration={message.thinkingDuration ?? null} />
                     )}
                     <div className={`${isUser ? 'bg-primary text-white' : 'bg-transparent w-full'} rounded-3xl rounded-tr px-4 py-2`}>
-                        <div className={`prose prose-sm max-w-none break-words ${isUser ? 'text-white prose-invert' : 'text-text-primary'} [&>p]:!text-[14.5px] [&>p]:!leading-loose [&>ul>li]:!text-[14.5px] [&>ul>li]:!leading-loose [&>ol>li]:!text-[14.5px] [&>ol>li]:!leading-loose [&>ul]:!list-disc [&>ul]:!pl-5`}>
+                        <div className={`prose prose-sm max-w-none break-words ${isUser ? 'text-white prose-invert' : 'text-text-primary'} [&>p]:!text-base [&>p]:!leading-loose [&>ul>li]:!text-base [&>ul>li]:!leading-loose [&>ol>li]:!text-base [&>ol>li]:!leading-loose [&>ul]:!list-disc [&>ul]:!pl-5`}>
                             {isUser ? (
-                                <p className="whitespace-pre-wrap !text-[14.5px] !leading-loose">{message.content}</p>
+                                <p className="whitespace-pre-wrap !text-lg !leading-loose">{message.content}</p>
                             ) : (() => {
                                 function extractPages(attrs: string): { start: string | null; end: string | null } {
                                     const page = attrs.match(/\bpage=(['"])(.*?)\1/)?.[2];

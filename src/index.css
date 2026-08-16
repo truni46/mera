@@ -5,12 +5,12 @@
 @layer base {
   /*
    * Responsive base font-size:
-   *   14.5px at 1366px (14" laptop) — scales linearly via vw.
-   *   min 13px (≤ ~1024px), max 16px (≥ ~1920px).
-   *   Formula: 14.5 / 1366 ≈ 1.061vw → clamp(13px, 1.061vw, 16px)
+   *   ~13px at 1366px (14" laptop) — scales linearly via vw.
+   *   min 11.5px (≤ ~1024px), max 14px (≥ ~1920px).
+   *   Formula: 13 / 1366 ≈ 0.952vw → clamp(11.5px, 0.952vw, 14px)
    */
   html {
-    font-size: clamp(13px, 1.061vw, 16px);
+    font-size: clamp(11.5px, 0.952vw, 14px);
   }
 
   body {
@@ -31,18 +31,27 @@
   }
 
   /* Scrollbar styling - light theme */
-  /* Scrollbar styling - default (removed custom green) */
-  /* .custom-scrollbar::-webkit-scrollbar {
-    width: 8px;
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
   }
-
   .custom-scrollbar::-webkit-scrollbar-track {
-    @apply bg-transparent;
+    background: transparent;
   }
-
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-primary bg-opacity-30 rounded-full hover:bg-opacity-50 transition-colors;
-  } */
+    background: #d1d5db;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    border-radius: 9999px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+  }
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #d1d5db transparent;
+    scrollbar-gutter: stable;
+  }
 
   .dropdown-scroll::-webkit-scrollbar {
     width: 4px;
@@ -52,6 +61,8 @@
   }
   .dropdown-scroll::-webkit-scrollbar-thumb {
     background: #d1d5db;
+    border: 2px solid transparent;
+    background-clip: padding-box;
     border-radius: 9999px;
   }
   .dropdown-scroll::-webkit-scrollbar-thumb:hover {
@@ -60,6 +71,13 @@
   .dropdown-scroll {
     scrollbar-width: thin;
     scrollbar-color: #d1d5db transparent;
+  }
+
+  .overlay-scroll {
+    scrollbar-width: none;
+  }
+  .overlay-scroll::-webkit-scrollbar {
+    display: none;
   }
 
   /* Button styles - light theme with green accents */

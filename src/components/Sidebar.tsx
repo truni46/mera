@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import ConversationList from './chat/ConversationList';
+import OverlayScrollArea from './OverlayScrollArea';
 import UserMenu from './UserMenu';
 import logo from '../assets/logo.png';
 import type { ConversationSummary, User } from '../types';
@@ -29,14 +30,14 @@ export default function Sidebar({
     const isDocumentsPage = location.pathname === '/documents';
 
     return (
-        <div className={`${isExpanded ? 'w-64' : 'w-16'} bg-sidebar border border-gray-300 flex flex-col transition-all duration-300 m-3 rounded-2xl overflow-hidden`}>
+        <div className={`${isExpanded ? 'w-64' : 'w-16'} bg-sidebar border border-gray-200 flex flex-col transition-all duration-300 m-2 rounded-2xl overflow-hidden`}>
             {/* Header */}
             <div className="p-3 flex items-center justify-between">
                 {isExpanded ? (
                     <>
                         <div className="flex items-center space-x-2">
                             <img src={logo} alt="Logo" className="w-10 h-8 object-contain" />
-                            <span className="font-semibold text-text-primary text-sm md:text-base">Mera</span>
+                            <span className="font-semibold text-text-primary text-sm md:text-lg">Mera</span>
                         </div>
                         <button
                             onClick={() => setIsExpanded(false)}
@@ -96,7 +97,7 @@ export default function Sidebar({
                             </button>
                         </nav>
 
-                        <div className="flex-1 mt-4 overflow-y-auto min-h-0 custom-scrollbar">
+                        <OverlayScrollArea className="flex-1 mt-4 min-h-0">
                             <div className="px-3 mb-2">
                                 <button className="w-full flex items-center justify-between text-text-secondary hover:text-text-primary transition-colors">
                                     <span className="text-xs md:text-sm font-medium text-gray-400 tracking-wide">Chats</span>
@@ -112,7 +113,7 @@ export default function Sidebar({
                                 onDelete={onDeleteConversation}
                                 deletingId={deletingId}
                             />
-                        </div>
+                        </OverlayScrollArea>
                     </>
                 ) : (
                     <div className="flex flex-col items-center space-y-2 p-2 mt-2">

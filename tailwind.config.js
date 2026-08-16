@@ -7,13 +7,11 @@ export default {
     theme: {
         extend: {
             colors: {
-                // Light Theme with Bright Green Accents
-                // Light Theme with Bright Green Accents
-                // Light Theme with Bright Green Accents
                 'primary': '#007E6E',        // Teal Green (User Requested)
                 'primary-dark': '#006558',   // Darker shade
                 'primary-light': '#d1fae5',  // Light green background
-                'page': '#F8FFFE',           // Light green background (Visible Green 100)
+                'page': '#ffffff',           // White background
+                'app-bg': '#f3f3f3',         // Gray app background behind floating cards
                 'sidebar': '#ffffff',        // White sidebar
                 'bg-tertiary': '#f3f4f6',    // Slightly darker gray
                 'text-primary': '#111827',   // Dark gray text

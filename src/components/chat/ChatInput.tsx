@@ -310,7 +310,7 @@ export default function ChatInput({
                                     onCompositionStart={() => { isComposing.current = true; }}
                                     onCompositionEnd={() => { isComposing.current = false; handleInput(); }}
                                     data-placeholder="Say something..."
-                                    className="chat-editor w-full bg-transparent text-sm md:text-[14.5px] leading-[1.5] text-text-primary resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] overflow-y-auto ml-1 mb-1 whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-text-muted"
+                                    className="chat-editor w-full bg-transparent text-sm md:text-base leading-[1.5] text-text-primary resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-[200px] overflow-y-auto ml-1 mb-1 whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-text-muted"
                                     role="textbox"
                                     style={{ minHeight: '24px', lineHeight: 1.5 }}
                                 />

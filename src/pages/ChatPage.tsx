@@ -525,14 +525,14 @@ export default function ChatPage() {
     };
 
     return (
-        <div className="flex flex-col h-full w-full bg-page relative">
+        <div className="flex flex-col h-full w-full pt-2 pr-2 pb-2 relative">
             <Topbar
                 title={conversations?.find(c => c.id === activeConversationId)?.title || 'Chat'}
                 isNew={!activeConversationId}
             />
-
-            {/* Content Area (chat + optional side viewer) */}
-            <div className="flex-1 flex w-full relative overflow-hidden bg-page" ref={splitPaneRef}>
+            <div className="flex flex-col flex-1 bg-white rounded-b-2xl border border-gray-200 border-t-0 overflow-hidden relative">
+                {/* Content Area (chat + optional side viewer) */}
+                <div className="flex-1 flex w-full relative overflow-hidden" ref={splitPaneRef}>
 
                 {/* Main Chat Area */}
                 <div className="flex flex-col h-full relative flex-1 min-w-0">
@@ -641,6 +641,7 @@ export default function ChatPage() {
                         />
                     </div>
                 )}
+            </div>
             </div>
         </div>
     );
