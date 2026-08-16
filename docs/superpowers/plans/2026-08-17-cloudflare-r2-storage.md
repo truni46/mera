@@ -972,6 +972,8 @@ git commit -m "feat: serve document files and OCR text from R2"
   - `deleteDocument`: R2 keys → `r2Storage.delete` for source + OCR keys; legacy → `os.remove`.
   - `retryDocument`: existence check uses `r2Storage.exists` for R2 keys.
   - `getDocumentContext` / `searchDocumentContext`: read via `_readTextFromStorage`.
+  - `_generateSummary`: read via `_readTextFromStorage`; `_processDocument` passes stable R2 refs (not temp paths) to it when R2 is used.
+- Amendment (controller + user approved, 08-17): fix `_generateSummary` R2 temp-path race — Task 4 passed `workingPath`/`indexPath` (temp files deleted in `finally` before the summary task runs). Task 6 additionally updates `_generateSummary` to read via `_readTextFromStorage` and updates the `_processDocument` call-site to pass `ocrKey` (scanned R2) / `filePath` (non-scanned R2) instead of temp paths.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1175,26 +1177,61 @@ Replace lines 394-419 (from `async def deleteDocument` through the `return True`
         return True
 ```
 
-- [ ] **Step 7: Run tests to verify they pass**
+- [ ] **Step 7: Make `_generateSummary` storage-aware**
+
+Replace line 314 (currently):
+
+```python
+            text = _readTextContent(indexPath or filePath)
+```
+
+with:
+
+```python
+            text = await _readTextFromStorage(indexPath or filePath)
+```
+
+- [ ] **Step 8: Pass stable refs to `_generateSummary` in `_processDocument`**
+
+Replace the call-site line 297 (currently):
+
+```python
+                asyncio.create_task(self._generateSummary(documentId, workingPath, indexPath))
+```
+
+with:
+
+```python
+                if isR2Key(filePath):
+                    asyncio.create_task(
+                        self._generateSummary(documentId, filePath, ocrKey if isScanned else filePath)
+                    )
+                else:
+                    asyncio.create_task(self._generateSummary(documentId, workingPath, indexPath))
+```
+
+Note: `ocrKey` exists only inside the scanned ± R2 branch (line 273), so this reference is safe. For scanned R2 documents the summary reads the uploaded `ocr/<documentId>.md`; for non-scanned R2 documents it reads the source R2 object; local documents keep the temp/local paths (they persist on disk).
+
+- [ ] **Step 9: Run tests to verify they pass**
 
 Run: `.venv\Scripts\python.exe -m pytest server\tests\knowledge\test_service.py -v`
 Expected: all pass.
 
-- [ ] **Step 8: Run the full backend suite**
+- [ ] **Step 10: Run the full backend suite**
 
 Run: `.venv\Scripts\python.exe -m pytest server\tests -v`
 Expected: all pass.
 
-- [ ] **Step 9: Run a backend smoke import**
+- [ ] **Step 11: Run a backend smoke import**
 
 Run: `.venv\Scripts\python.exe -c "import server.apiRouter"` from project root.
 Expected: no traceback.
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 12: Commit**
 
 ```bash
 git add server/modules/knowledge/service.py server/tests/knowledge/test_service.py
-git commit -m "feat: storage-aware delete, retry, and context reads"
+git commit -m "feat: storage-aware delete, retry, context, and summary reads"
 ```
 
 ---
