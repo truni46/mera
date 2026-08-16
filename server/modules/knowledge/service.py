@@ -121,9 +121,17 @@ def _readTextContent(filePath: str, maxChars: int = SUMMARY_MAX_CHARS) -> str:
 
 
 async def _readTextFromStorage(storageRef: str, maxChars: int = SUMMARY_MAX_CHARS) -> str:
-    if isR2Key(storageRef):
-        return await r2Storage.readText(storageRef, maxChars=maxChars)
-    return _readTextContent(storageRef, maxChars)
+    if not isR2Key(storageRef):
+        return _readTextContent(storageRef, maxChars)
+    ext = os.path.splitext(storageRef)[1].lower()
+    if ext in (".pdf", ".doc", ".docx", ".xlsx", ".xls"):
+        tmpPath = await r2Storage.downloadToTemp(storageRef)
+        try:
+            return _readTextContent(tmpPath, maxChars)
+        finally:
+            if tmpPath and os.path.exists(tmpPath):
+                os.remove(tmpPath)
+    return await r2Storage.readText(storageRef, maxChars=maxChars)
 
 
 class DocumentService:
@@ -186,14 +194,7 @@ class DocumentService:
             filename = f"{stem} ({count}){ext}"
 
         storedFilename = f"{uuid.uuid4().hex}_{filename}"
-        if r2Storage.enabled:
-            filePath = content
-        else:
-            filePath = UPLOAD_DIR / storedFilename
-            with open(filePath, "wb") as f:
-                f.write(content)
-
-        storedRef = str(filePath)
+        storedRef = None
         if r2Storage.enabled:
             r2Key = f"documents/{uuid.uuid4().hex}/{storedFilename}"
             try:
@@ -202,6 +203,11 @@ class DocumentService:
             except Exception as e:
                 logger.error(f"_uploadOne R2 upload failed for '{filename}': {e}")
                 raise
+        else:
+            filePath = UPLOAD_DIR / storedFilename
+            with open(filePath, "wb") as f:
+                f.write(content)
+            storedRef = str(filePath)
 
         record = await documentRepository.create(
             userId=userId,
@@ -244,8 +250,8 @@ class DocumentService:
                     logger.info(f"_processDocument converting .doc to .docx documentId={documentId}")
                     docxPath = _convertDocToDocx(workingPath)
                     if docxPath:
-                        tempToClean.append(docxPath)
                         if isR2Key(filePath):
+                            tempToClean.append(docxPath)
                             docxKey = f"documents/{documentId}/{os.path.basename(docxPath)}"
                             with open(docxPath, "rb") as f:
                                 docxContent = f.read()
@@ -261,6 +267,7 @@ class DocumentService:
                         logger.info(f"_processDocument .doc conversion done elapsed={time.perf_counter()-tConvert:.2f}s documentId={documentId}")
 
                 indexPath = workingPath
+                ocrKey = None
                 tOcrCheck = time.perf_counter()
                 isScanned = needsOcr(workingPath)
                 logger.info(f"_processDocument needsOcr={isScanned} elapsed={time.perf_counter()-tOcrCheck:.2f}s documentId={documentId}")
@@ -305,7 +312,7 @@ class DocumentService:
                 logger.info(f"_processDocument completed documentId={documentId} total={total:.2f}s")
                 if isR2Key(filePath):
                     asyncio.create_task(
-                        self._generateSummary(documentId, filePath, ocrKey if isScanned else filePath)
+                        self._generateSummary(documentId, filePath, ocrKey or filePath)
                     )
                 else:
                     asyncio.create_task(self._generateSummary(documentId, workingPath, indexPath))

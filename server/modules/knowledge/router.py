@@ -19,8 +19,8 @@ def _removeTempFile(path: str) -> None:
     try:
         if path and os.path.exists(path):
             os.remove(path)
-    except OSError:
-        pass
+    except OSError as e:
+        logger.warning(f"_removeTempFile failed for {path}: {e}")
 
 
 @router.post("/documents/upload")
