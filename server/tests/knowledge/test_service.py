@@ -90,3 +90,43 @@ def test_searchDocumentContext_uses_vector_when_score_high():
     assert "chunk text" in contextText
     assert sources[0]["filename"] == "test.pdf"
     assert sources[0]["pageNumber"] == 2
+
+
+def test__uploadOne_uploads_to_r2_when_r2_enabled():
+    import asyncio
+    from unittest.mock import AsyncMock, patch
+    from modules.knowledge.service import documentService, UPLOAD_DIR
+
+    class FakeFile:
+        filename = "report.pdf"
+
+        async def read(self):
+            return b"%PDF-1.7 fake pdf content"
+
+    record = {
+        "id": "doc-r2-1",
+        "userId": "user1",
+        "filename": "report.pdf",
+        "filePath": "documents/doc-r2-1/report.pdf",
+    }
+    uploadCalls = []
+
+    async def fakeUpload(content, key, contentType):
+        uploadCalls.append((key, contentType))
+        return key
+
+    with patch("modules.knowledge.service.r2Storage") as mockR2, \
+         patch("modules.knowledge.service.documentRepository.create", new=AsyncMock(return_value=record)), \
+         patch("modules.knowledge.service.documentRepository.getByHashAndOwner", new=AsyncMock(return_value=None)), \
+         patch("modules.knowledge.service.documentRepository.countByFilenamePattern", new=AsyncMock(return_value=0)), \
+         patch("modules.knowledge.service.documentService._processDocument", new=AsyncMock()):
+        mockR2.enabled = True
+        mockR2.uploadBytes = fakeUpload
+        result = asyncio.get_event_loop().run_until_complete(
+            documentService._uploadOne("user1", FakeFile(), "personal", "user1", "user", None)
+        )
+
+    assert result["filePath"].startswith("documents/doc-r2-1/")
+    assert uploadCalls[0][1] == "application/pdf"
+    localCandidate = UPLOAD_DIR / result["filePath"].split("/")[-1]
+    assert not localCandidate.exists(), "must not write to local disk when R2 enabled"

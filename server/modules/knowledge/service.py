@@ -13,6 +13,7 @@ from modules.rag.ragService import ragService
 from modules.llm.llmProvider import llmProvider
 from common.prompts import DOCUMENT_SUMMARY_SYSTEM, documentSummaryUserPrompt
 from modules.ocr.ocrProvider import ocrService, needsOcr
+from modules.storage.r2Storage import r2Storage, isR2Key
 
 UPLOAD_DIR = Path(__file__).parent.parent.parent / "data" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -26,6 +27,21 @@ SUMMARY_MAX_CHARS = 4000
 
 def _computeHash(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
+
+
+_MIME_TYPES = {
+    ".pdf": "application/pdf",
+    ".txt": "text/plain",
+    ".md": "text/markdown",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".doc": "application/msword",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xls": "application/vnd.ms-excel",
+}
+
+
+def _mimeForExt(ext: str) -> str:
+    return _MIME_TYPES.get(ext.lower(), "application/octet-stream")
 
 
 def _convertDocToDocx(filePath: str) -> Optional[str]:
@@ -158,16 +174,28 @@ class DocumentService:
             filename = f"{stem} ({count}){ext}"
 
         storedFilename = f"{uuid.uuid4().hex}_{filename}"
-        filePath = UPLOAD_DIR / storedFilename
+        if r2Storage.enabled:
+            filePath = content
+        else:
+            filePath = UPLOAD_DIR / storedFilename
+            with open(filePath, "wb") as f:
+                f.write(content)
 
-        with open(filePath, "wb") as f:
-            f.write(content)
+        storedRef = str(filePath)
+        if r2Storage.enabled:
+            r2Key = f"documents/{uuid.uuid4().hex}/{storedFilename}"
+            try:
+                await r2Storage.uploadBytes(content, r2Key, _mimeForExt(fileExt))
+                storedRef = r2Key
+            except Exception as e:
+                logger.error(f"_uploadOne R2 upload failed for '{filename}': {e}")
+                raise
 
         record = await documentRepository.create(
             userId=userId,
             filename=filename,
             storedFilename=storedFilename,
-            filePath=str(filePath),
+            filePath=storedRef,
             fileType=fileExt.lstrip("."),
             fileSize=len(content),
             contentHash=contentHash,
@@ -178,7 +206,7 @@ class DocumentService:
         )
 
         asyncio.create_task(
-            self._processDocument(record["id"], str(filePath), ownerId, userId, filename)
+            self._processDocument(record["id"], storedRef, ownerId, userId, filename)
         )
         return record
 
