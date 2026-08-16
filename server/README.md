@@ -35,8 +35,10 @@ DB_PASSWORD=secure_password_123
 ### 3. Run Database Migration (if using PostgreSQL)
 
 '''bash
-python migrations/migrate.py
+scripts/migrate_db.sh
 '''
+
+This creates the database (if missing) and applies 'migrations/schema.sql' — the single consolidated schema file.
 
 ### 4. Start the Server
 
@@ -75,7 +77,9 @@ server_python/
 ├── websocket/
 │   └── handlers.py      # WebSocket event handlers
 ├── migrations/
-│   └── migrate.py       # Database migration script
+│   └── schema.sql        # Consolidated database schema
+├── scripts/
+│   └── migrate_db.sh     # Creates the DB and applies schema.sql
 ├── main.py              # Application entry point
 ├── requirements.txt     # Python dependencies
 └── .env                 # Environment variables
