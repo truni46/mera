@@ -401,6 +401,17 @@ class OCRService:
                 f.write("\n\n")
         return outputPath
 
+    def saveOcrMarkdown(self, pages: List[OcrPage], outputPath: str) -> str:
+        """Save OCR results to a markdown file. Returns the output path."""
+        os.makedirs(os.path.dirname(outputPath), exist_ok=True)
+        with open(outputPath, "w", encoding="utf-8") as f:
+            for page in pages:
+                f.write(f"## Page {page.pageNumber}\n\n")
+                if page.text:
+                    f.write(page.text + "\n")
+                f.write("\n")
+        return outputPath
+
     @property
     def providerName(self) -> str:
         return self._getProvider().providerName
