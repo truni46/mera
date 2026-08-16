@@ -17,7 +17,8 @@ class DocumentService {
         files: File[],
         onProgress?: ProgressCallback,
         scope = 'personal',
-        onXhr?: XhrCallback
+        onXhr?: XhrCallback,
+        parentId?: string
     ): Promise<DocumentItem[]> {
         return new Promise((resolve, reject) => {
             const formData = new FormData();
@@ -50,7 +51,8 @@ class DocumentService {
             xhr.onabort = () => reject(new Error('Upload aborted'));
 
             const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
-            xhr.open('POST', `${baseUrl}/knowledge/documents/upload?scope=${scope}`);
+            const parentParam = parentId ? `&parentId=${encodeURIComponent(parentId)}` : '';
+            xhr.open('POST', `${baseUrl}/knowledge/documents/upload?scope=${scope}${parentParam}`);
             if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
             xhr.send(formData);
         });

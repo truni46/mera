@@ -117,9 +117,10 @@ function FileProgressItem({ item, onPause, onResume, onCancel }: FileProgressIte
 
 interface DocumentUploadZoneProps {
     onUploadComplete: () => void;
+    folderId?: string | null;
 }
 
-export default function DocumentUploadZone({ onUploadComplete }: DocumentUploadZoneProps) {
+export default function DocumentUploadZone({ onUploadComplete, folderId = null }: DocumentUploadZoneProps) {
     const [dragOver, setDragOver] = useState(false);
     const [uploadItems, setUploadItems] = useState<UploadItem[]>([]);
     const inputId = useId();
@@ -210,7 +211,7 @@ export default function DocumentUploadZone({ onUploadComplete }: DocumentUploadZ
                 delete pauseFlagsRef.current[itemId];
             }
         },
-        [updateItem, removeItem, toast, onUploadComplete],
+        [updateItem, removeItem, toast, onUploadComplete, folderId],
     );
 
     const uploadFile = useCallback(
@@ -225,6 +226,7 @@ export default function DocumentUploadZone({ onUploadComplete }: DocumentUploadZ
                     progress => updateItem(item.id, { progress }),
                     'personal',
                     (xhr) => { xhrMapRef.current[item.id] = xhr; },
+                    folderId || undefined,
                 );
                 delete xhrMapRef.current[item.id];
 
@@ -237,6 +239,8 @@ export default function DocumentUploadZone({ onUploadComplete }: DocumentUploadZ
                     progress: 100,
                     documentId,
                 });
+
+                if (onUploadComplete) onUploadComplete();
 
                 if (documentId) {
                     pollIndexingStatus(item.id, documentId);
@@ -255,7 +259,7 @@ export default function DocumentUploadZone({ onUploadComplete }: DocumentUploadZ
                 }
             }
         },
-        [updateItem, pollIndexingStatus],
+        [updateItem, pollIndexingStatus, onUploadComplete],
     );
 
     const handleResume = useCallback((id: string) => {
@@ -328,11 +332,11 @@ export default function DocumentUploadZone({ onUploadComplete }: DocumentUploadZ
                 <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
                     <FiUploadCloud size={22} className="text-gray-500" />
                 </div>
-                <p className="font-medium text-sm">Upload Documents</p>
-                <p className="text-xs text-text-secondary text-center">
+                <p className="font-medium text-md">Upload Documents</p>
+                <p className="text-sm text-text-secondary text-center">
                     Drag and drop files here, or click to browse
                 </p>
-                <p className="text-xs text-text-secondary text-center">
+                <p className="text-sm text-text-secondary text-center">
                     PDF, DOCX, XLSX, TXT, MD &nbsp;·&nbsp; Max 50 MB per file
                 </p>
                 <input

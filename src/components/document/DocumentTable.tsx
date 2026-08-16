@@ -1,13 +1,17 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { FiSearch, FiTrash2 } from 'react-icons/fi';
+import { FiSearch, FiTrash2, FiPlus, FiEdit2 } from 'react-icons/fi';
 import DocumentCard from './DocumentCard';
+import FolderCard from './FolderCard';
 import DocumentDetailModal from './DocumentDetailModal';
 import OcrViewerModal from './OcrViewerModal';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Table from '../ui/Table';
 import Checkbox from '../ui/Checkbox';
 import documentService from '../../services/documentService';
+import folderService from '../../services/folderService';
 import type { DocumentItem } from '../../types';
+import type { Folder } from '../../types/folder';
+import gradientSpinner from '../../assets/svg/gradientSpinner.svg';
 
 const POLL_INTERVAL_MS = 3000;
 const PAGE_SIZE = 10;
@@ -24,9 +28,15 @@ type DeleteTarget =
 
 interface DocumentTableProps {
     refreshTrigger: number;
+    folderId: string | null;
+    onNavigateFolder: (folderId: string, name: string) => void;
 }
 
-export default function DocumentTable({ refreshTrigger }: DocumentTableProps) {
+type FolderDeleteTarget = { id: string; name: string } | null;
+type RenameTarget = { id: string; name: string } | null;
+
+export default function DocumentTable({ refreshTrigger, folderId, onNavigateFolder }: DocumentTableProps) {
+    const [folders, setFolders] = useState<Folder[]>([]);
     const [documents, setDocuments] = useState<DocumentItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedDoc, setSelectedDoc] = useState<DocumentItem | null>(null);
@@ -34,36 +44,46 @@ export default function DocumentTable({ refreshTrigger }: DocumentTableProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [creatingFolder, setCreatingFolder] = useState(false);
+    const [folderName, setFolderName] = useState('');
+    const [folderDeleting, setFolderDeleting] = useState(false);
+    const [folderDeleteTarget, setFolderDeleteTarget] = useState<FolderDeleteTarget>(null);
+    const [renameTarget, setRenameTarget] = useState<RenameTarget>(null);
+    const [renameValue, setRenameValue] = useState('');
+    const [error, setError] = useState('');
     const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const newFolderInputRef = useRef<HTMLInputElement>(null);
 
-    const fetchDocuments = async (showLoading = false) => {
+    const fetchContents = useCallback(async (showLoading = false) => {
         if (showLoading) setLoading(true);
         try {
-            const docs = await documentService.getDocuments();
-            setDocuments(docs);
+            const contents = await folderService.getFolderContents(folderId);
+            setFolders(contents.folders);
+            setDocuments(contents.documents);
         } catch (err) {
-            console.error('fetchDocuments failed:', err);
+            console.error('fetchContents failed:', err);
         } finally {
             setLoading(false);
         }
-    };
+    }, [folderId]);
 
     useEffect(() => {
-        fetchDocuments(true);
-    }, []);
+        fetchContents(true);
+    }, [fetchContents]);
 
     useEffect(() => {
-        if (refreshTrigger > 0) fetchDocuments(false);
-    }, [refreshTrigger]);
+        if (refreshTrigger > 0) fetchContents(false);
+    }, [refreshTrigger, fetchContents]);
 
     useEffect(() => {
         const needsPolling = hasProcessingDocs(documents);
         if (needsPolling && !pollingRef.current) {
             pollingRef.current = setInterval(async () => {
                 try {
-                    const docs = await documentService.getDocuments();
-                    setDocuments(docs);
-                    if (!hasProcessingDocs(docs) && pollingRef.current) {
+                    const contents = await folderService.getFolderContents(folderId);
+                    setFolders(contents.folders);
+                    setDocuments(contents.documents);
+                    if (!hasProcessingDocs(contents.documents) && pollingRef.current) {
                         clearInterval(pollingRef.current);
                         pollingRef.current = null;
                     }
@@ -75,7 +95,7 @@ export default function DocumentTable({ refreshTrigger }: DocumentTableProps) {
             clearInterval(pollingRef.current);
             pollingRef.current = null;
         }
-    }, [documents]);
+    }, [documents, folderId]);
 
     useEffect(() => {
         return () => {
@@ -92,16 +112,28 @@ export default function DocumentTable({ refreshTrigger }: DocumentTableProps) {
         );
     }, [documents, searchQuery]);
 
-    const totalPages = Math.max(1, Math.ceil(filteredDocs.length / PAGE_SIZE));
+    const filteredFolders = useMemo(() => {
+        if (!searchQuery.trim()) return folders;
+        const q = searchQuery.toLowerCase();
+        return folders.filter(folder => folder.name?.toLowerCase().includes(q));
+    }, [folders, searchQuery]);
+
+    const combinedItems = useMemo(() => [...filteredFolders, ...filteredDocs], [filteredFolders, filteredDocs]);
+    const totalPages = Math.max(1, Math.ceil(combinedItems.length / PAGE_SIZE));
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery]);
+    }, [searchQuery, folderId]);
 
-    const paginatedDocs = useMemo(() => {
+    const paginatedItems = useMemo(() => {
         const start = (currentPage - 1) * PAGE_SIZE;
-        return filteredDocs.slice(start, start + PAGE_SIZE);
-    }, [filteredDocs, currentPage]);
+        return combinedItems.slice(start, start + PAGE_SIZE);
+    }, [combinedItems, currentPage]);
+
+    const paginatedDocs = useMemo(
+        () => paginatedItems.filter((i): i is DocumentItem => 'filename' in i),
+        [paginatedItems],
+    );
 
     const allSelected = paginatedDocs.length > 0 && paginatedDocs.every(d => selectedIds.has(d.id));
     const someSelected = !allSelected && paginatedDocs.some(d => selectedIds.has(d.id));
@@ -166,6 +198,76 @@ export default function DocumentTable({ refreshTrigger }: DocumentTableProps) {
         setDeleteTarget(null);
     }, []);
 
+    const handleCreateFolderStart = () => {
+        setCreatingFolder(true);
+        setFolderName('');
+        setError('');
+        setTimeout(() => newFolderInputRef.current?.focus(), 0);
+    };
+
+    const handleCreateFolderSubmit = async () => {
+        const name = folderName.trim();
+        if (!name) {
+            setCreatingFolder(false);
+            return;
+        }
+        try {
+            await folderService.createFolder(folderId, name);
+            setFolderName('');
+            setCreatingFolder(false);
+            setError('');
+            fetchContents(false);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to create folder');
+        }
+    };
+
+    const handleCreateFolderCancel = () => {
+        setCreatingFolder(false);
+        setError('');
+    };
+
+    const handleFolderDeleteRequest = (folder: Folder) => {
+        setFolderDeleteTarget({ id: folder.id, name: folder.name });
+    };
+
+    const handleFolderDeleteConfirm = async () => {
+        if (!folderDeleteTarget) return;
+        try {
+            setFolderDeleting(true);
+            await folderService.deleteFolder(folderDeleteTarget.id);
+            setFolders(prev => prev.filter(f => f.id !== folderDeleteTarget.id));
+        } catch (err) {
+            console.error('Delete folder failed:', err);
+        } finally {
+            setFolderDeleteTarget(null);
+            setFolderDeleting(false);
+        }
+    };
+
+    const handleRenameRequest = (folder: Folder) => {
+        setRenameTarget({ id: folder.id, name: folder.name });
+        setRenameValue(folder.name);
+        setError('');
+        setTimeout(() => newFolderInputRef.current?.focus(), 0);
+    };
+
+    const handleRenameSubmit = async () => {
+        if (!renameTarget) return;
+        const name = renameValue.trim();
+        if (!name) {
+            setRenameTarget(null);
+            return;
+        }
+        try {
+            await folderService.renameFolder(renameTarget.id, name);
+            setFolders(prev => prev.map(f => f.id === renameTarget.id ? { ...f, name } : f));
+            setRenameTarget(null);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to rename folder');
+        }
+    };
+
     const buildPageNumbers = (): (number | string)[] => {
         const pages: (number | string)[] = [];
         if (totalPages <= 7) {
@@ -197,53 +299,160 @@ export default function DocumentTable({ refreshTrigger }: DocumentTableProps) {
                         className="pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:bg-white focus:outline-none focus:border-gray-600 transition-colors w-64"
                     />
                 </div>
-                {!loading && filteredDocs.length > 0 && (
-                    <div className="flex items-center gap-2">
-                        <Checkbox
-                            checked={allSelected}
-                            indeterminate={someSelected}
-                            onChange={toggleSelectAll}
-                        />
-                        {hasSelection && (
-                            <span className="text-sm text-text-secondary">({selectedIds.size})</span>
-                        )}
-                        <button
-                            onClick={handleBulkDeleteRequest}
-                            disabled={!hasSelection || bulkDeleting}
-                            className={`p-1.5 rounded-md transition-colors ${hasSelection
-                                ? 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                                : 'text-gray-300 cursor-not-allowed'
-                                }`}
-                            title={hasSelection ? `Delete ${selectedIds.size} selected` : 'Select items to delete'}
-                        >
-                            <FiTrash2 size={16} />
-                        </button>
-                    </div>
-                )}
+                <div className="flex items-center gap-2">
+                    {!loading && filteredDocs.length > 0 && (
+                        <div className="flex items-center gap-2">
+                            <Checkbox
+                                checked={allSelected}
+                                indeterminate={someSelected}
+                                onChange={toggleSelectAll}
+                            />
+                            {hasSelection && (
+                                <span className="text-sm text-text-secondary">({selectedIds.size})</span>
+                            )}
+                            <button
+                                onClick={handleBulkDeleteRequest}
+                                disabled={!hasSelection || bulkDeleting}
+                                className={`p-1.5 rounded-md transition-colors ${hasSelection
+                                    ? 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                                    : 'text-gray-300 cursor-not-allowed'
+                                    }`}
+                                title={hasSelection ? `Delete ${selectedIds.size} selected` : 'Select items to delete'}
+                            >
+                                <FiTrash2 size={16} />
+                            </button>
+                        </div>
+                    )}
+                    <button
+                        onClick={handleCreateFolderStart}
+                        className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+                    >
+                        <FiPlus size={15} />
+                        New
+                    </button>
+                </div>
             </div>
+            {error && (
+                <div className="mb-3 px-4 py-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg">
+                    {error}
+                </div>
+            )}
             <div className="bg-white rounded-xl border border-border-color overflow-hidden">
                 {loading ? (
-                    <div className="p-12 text-center text-sm text-text-secondary">
-                        Loading...
+                    <div className="flex flex-col items-center justify-center py-16 gap-3">
+                        <div className="w-12 h-12">
+                            <img src={gradientSpinner} alt="Loading" className="w-full h-full" />
+                        </div>
+                        <p className="text-sm text-text-secondary">Loading documents...</p>
                     </div>
-                ) : filteredDocs.length === 0 ? (
+                ) : combinedItems.length === 0 ? (
                     <div className="p-12 text-center text-sm text-text-secondary">
-                        {searchQuery ? 'No documents match your search.' : 'No documents uploaded yet.'}
+                        {searchQuery ? 'No items match your search.' : 'No folders or documents here yet.'}
                     </div>
                 ) : (
                     <>
-                        <Table headers={['', 'Name', 'Type', 'Size', 'Status', 'Uploaded', 'Actions']}>
-                            {paginatedDocs.map(doc => (
-                                <DocumentCard
-                                    key={doc.id}
-                                    document={doc}
-                                    selected={selectedIds.has(doc.id)}
-                                    onToggleSelect={() => toggleSelect(doc.id)}
-                                    onView={setSelectedDoc}
-                                    onDelete={handleDeleteRequest}
-                                    onViewOcr={setOcrDoc}
-                                />
-                            ))}
+                        <Table headers={['', 'Name', 'Status', 'Uploaded', 'Actions']}>
+                            {creatingFolder && (
+                                <tr className="bg-primary-light/40">
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center justify-center">
+                                            <FiPlus size={16} className="text-primary" />
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <input
+                                            ref={newFolderInputRef}
+                                            type="text"
+                                            value={folderName}
+                                            onChange={e => setFolderName(e.target.value)}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter') handleCreateFolderSubmit();
+                                                if (e.key === 'Escape') handleCreateFolderCancel();
+                                            }}
+                                            placeholder="Folder name"
+                                            className="w-full max-w-sm px-3 py-1.5 text-sm border border-primary rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                                        />
+                                    </td>
+                                    <td className="px-6 py-4" />
+                                    <td className="px-6 py-4" />
+                                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                                        <button
+                                            onClick={handleCreateFolderSubmit}
+                                            className="px-3 py-1.5 text-sm text-white bg-primary rounded-lg hover:bg-primary-dark transition-colors mr-2"
+                                        >
+                                            Create
+                                        </button>
+                                        <button
+                                            onClick={handleCreateFolderCancel}
+                                            className="px-3 py-1.5 text-sm text-text-secondary hover:bg-gray-100 rounded-lg transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </td>
+                                </tr>
+                            )}
+                            {renameTarget && (
+                                <tr className="bg-primary-light/40">
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center justify-center">
+                                            <FiEdit2 size={16} className="text-primary" />
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <input
+                                            ref={newFolderInputRef}
+                                            type="text"
+                                            value={renameValue}
+                                            onChange={e => setRenameValue(e.target.value)}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter') handleRenameSubmit();
+                                                if (e.key === 'Escape') setRenameTarget(null);
+                                            }}
+                                            className="w-full max-w-sm px-3 py-1.5 text-sm border border-primary rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                                        />
+                                    </td>
+                                    <td className="px-6 py-4" />
+                                    <td className="px-6 py-4" />
+                                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                                        <button
+                                            onClick={handleRenameSubmit}
+                                            className="px-3 py-1.5 text-sm text-white bg-primary rounded-lg hover:bg-primary-dark transition-colors mr-2"
+                                        >
+                                            Save
+                                        </button>
+                                        <button
+                                            onClick={() => setRenameTarget(null)}
+                                            className="px-3 py-1.5 text-sm text-text-secondary hover:bg-gray-100 rounded-lg transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </td>
+                                </tr>
+                            )}
+                            {paginatedItems.map(item => {
+                                if ('filename' in item) {
+                                    return (
+                                        <DocumentCard
+                                            key={item.id}
+                                            document={item}
+                                            selected={selectedIds.has(item.id)}
+                                            onToggleSelect={() => toggleSelect(item.id)}
+                                            onView={setSelectedDoc}
+                                            onDelete={handleDeleteRequest}
+                                            onViewOcr={setOcrDoc}
+                                        />
+                                    );
+                                }
+                                return (
+                                    <FolderCard
+                                        key={item.id}
+                                        folder={item}
+                                        onOpen={() => onNavigateFolder(item.id, item.name)}
+                                        onRename={() => handleRenameRequest(item)}
+                                        onDelete={() => handleFolderDeleteRequest(item)}
+                                    />
+                                );
+                            })}
                         </Table>
 
                         {totalPages > 1 && (
@@ -297,6 +506,20 @@ export default function DocumentTable({ refreshTrigger }: DocumentTableProps) {
                     onClose={() => setOcrDoc(null)}
                 />
             )}
+
+            <ConfirmDialog
+                open={!!folderDeleteTarget}
+                title="Delete folder?"
+                description={
+                    folderDeleteTarget
+                        ? `"${folderDeleteTarget.name}" and everything inside it will be permanently deleted. This action cannot be undone.`
+                        : ''
+                }
+                confirmLabel={folderDeleting ? 'Deleting...' : 'Delete'}
+                cancelLabel="Cancel"
+                onConfirm={handleFolderDeleteConfirm}
+                onCancel={() => setFolderDeleteTarget(null)}
+            />
 
             <ConfirmDialog
                 open={!!deleteTarget}

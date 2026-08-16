@@ -6,13 +6,6 @@ import { TableRow, TableCell } from '../ui/Table';
 import Checkbox from '../ui/Checkbox';
 import type { DocumentItem } from '../../types';
 
-function formatFileSize(bytes?: number): string {
-    if (!bytes) return '—';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 interface DocumentCardProps {
     document: DocumentItem;
     selected: boolean;
@@ -48,12 +41,6 @@ export default function DocumentCard({ document, selected, onToggleSelect, onVie
                         {document.filename}
                     </span>
                 </div>
-            </TableCell>
-            <TableCell className="text-sm text-text-secondary uppercase">
-                {document.fileType || '—'}
-            </TableCell>
-            <TableCell className="text-sm text-text-secondary">
-                {formatFileSize(document.fileSize)}
             </TableCell>
             <TableCell>
                 <DocumentStatusBadge status={document.embeddingStatus} />
