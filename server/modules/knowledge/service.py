@@ -113,12 +113,13 @@ class DocumentService:
         scope: str = "personal",
         ownerId: str = None,
         ownerType: str = "user",
+        parentId: str = None,
     ) -> List[Dict]:
         results = []
         for fileObj in files:
             try:
                 doc = await self._uploadOne(
-                    userId, fileObj, scope, ownerId or userId, ownerType
+                    userId, fileObj, scope, ownerId or userId, ownerType, parentId
                 )
                 results.append(doc)
             except Exception as e:
@@ -133,6 +134,7 @@ class DocumentService:
         scope: str,
         ownerId: str,
         ownerType: str,
+        parentId: str = None,
     ) -> Dict:
         filename = fileObj.filename
         fileExt = os.path.splitext(filename)[1].lower()
@@ -172,6 +174,7 @@ class DocumentService:
             scope=scope,
             ownerId=ownerId,
             ownerType=ownerType,
+            parentId=parentId,
         )
 
         asyncio.create_task(
@@ -270,8 +273,10 @@ class DocumentService:
             await documentRepository.updateSummary(documentId, "failed")
 
     async def getDocuments(
-        self, userId: str, scope: Optional[str] = None
+        self, userId: str, scope: Optional[str] = None, parentId: Optional[str] = None
     ) -> List[Dict]:
+        if parentId is not None:
+            return await documentRepository.getByParent(userId, parentId)
         return await documentRepository.getByUser(userId, scope)
 
     async def getDocument(self, documentId: str, userId: str) -> Optional[Dict]:

@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from common.deps import getCurrentUser
 from config.logger import logger
 from modules.knowledge.service import documentService
+from modules.folders.service import folderService
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
@@ -18,18 +19,26 @@ async def uploadDocuments(
     scope: str = Query(default="personal"),
     ownerId: Optional[str] = Query(default=None),
     ownerType: str = Query(default="user"),
+    parentId: Optional[str] = Query(default=None),
     currentUser: dict = Depends(getCurrentUser),
 ):
     try:
         userId = str(currentUser["id"])
+        if parentId:
+            folder = await folderService.getFolderById(parentId, userId)
+            if not folder:
+                raise HTTPException(status_code=404, detail="Folder not found")
         results = await documentService.uploadDocuments(
             userId=userId,
             files=files,
             scope=scope,
             ownerId=ownerId or userId,
             ownerType=ownerType,
+            parentId=parentId,
         )
         return results
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"POST /knowledge/documents/upload failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -38,12 +47,20 @@ async def uploadDocuments(
 @router.get("/documents")
 async def getDocuments(
     scope: Optional[str] = Query(default=None),
+    parentId: Optional[str] = Query(default=None),
     currentUser: dict = Depends(getCurrentUser),
 ):
     try:
+        userId = str(currentUser["id"])
+        if parentId:
+            folder = await folderService.getFolderById(parentId, userId)
+            if not folder:
+                raise HTTPException(status_code=404, detail="Folder not found")
         return await documentService.getDocuments(
-            userId=str(currentUser["id"]), scope=scope
+            userId=userId, scope=scope, parentId=parentId
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"GET /knowledge/documents failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

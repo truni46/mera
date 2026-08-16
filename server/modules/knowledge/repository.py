@@ -21,6 +21,7 @@ class DocumentRepository:
         scope: str = 'personal',
         ownerId: str = None,
         ownerType: str = 'user',
+        parentId: str = None,
     ) -> Dict:
         docId = str(uuid.uuid4())
         now = datetime.now(timezone.utc)
@@ -31,6 +32,7 @@ class DocumentRepository:
             "scope": scope,
             "ownerId": ownerIdVal,
             "ownerType": ownerType,
+            "parentId": parentId,
             "filename": filename,
             "storedFilename": storedFilename,
             "filePath": filePath,
@@ -47,12 +49,12 @@ class DocumentRepository:
             async with db.pool.acquire() as conn:
                 row = await conn.fetchrow(
                     """INSERT INTO documents (
-                        id, "userId", scope, "ownerId", "ownerType",
+                        id, "userId", scope, "ownerId", "ownerType", "parentId",
                         filename, "storedFilename", "filePath", "fileType", "fileSize", "contentHash",
                         "embeddingStatus", "summaryStatus", "createdAt", "updatedAt"
-                    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending','pending',$12,$13)
+                    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending','pending',$13,$14)
                     RETURNING *""",
-                    docId, userId, scope, ownerIdVal, ownerType,
+                    docId, userId, scope, ownerIdVal, ownerType, parentId,
                     filename, storedFilename, filePath, fileType, fileSize, contentHash,
                     now, now,
                 )
@@ -84,6 +86,34 @@ class DocumentRepository:
             docs = [d for d in data.values() if str(d.get("userId")) == str(userId)]
             if scope:
                 docs = [d for d in docs if d.get("scope") == scope]
+            docs.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
+            return docs
+
+    async def getByParent(self, userId: str, parentId: Optional[str] = None) -> List[Dict]:
+        if db.useDatabase and db.pool:
+            async with db.pool.acquire() as conn:
+                if parentId is None:
+                    rows = await conn.fetch(
+                        """SELECT * FROM documents
+                           WHERE "userId" = $1 AND "parentId" IS NULL
+                           ORDER BY "createdAt" DESC""",
+                        userId,
+                    )
+                else:
+                    rows = await conn.fetch(
+                        """SELECT * FROM documents
+                           WHERE "userId" = $1 AND "parentId" = $2
+                           ORDER BY "createdAt" DESC""",
+                        userId, parentId,
+                    )
+                return [dict(r) for r in rows]
+        else:
+            data = db.read_json("documents")
+            docs = [d for d in data.values() if str(d.get("userId")) == str(userId)]
+            if parentId is None:
+                docs = [d for d in docs if not d.get("parentId")]
+            else:
+                docs = [d for d in docs if str(d.get("parentId")) == str(parentId)]
             docs.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
             return docs
 
