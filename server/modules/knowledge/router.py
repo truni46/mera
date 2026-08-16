@@ -4,13 +4,23 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 from common.deps import getCurrentUser
 from config.logger import logger
 from modules.knowledge.service import documentService
 from modules.folders.service import folderService
+from modules.storage.r2Storage import r2Storage, isR2Key
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
+
+
+def _removeTempFile(path: str) -> None:
+    try:
+        if path and os.path.exists(path):
+            os.remove(path)
+    except OSError:
+        pass
 
 
 @router.post("/documents/upload")
@@ -87,9 +97,21 @@ async def serveDocumentFile(
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
         filePath = doc["filePath"]
+        mediaType = MIME_TYPES.get(doc.get("fileType", ""), "application/octet-stream")
+        if r2Storage.enabled and isR2Key(filePath):
+            try:
+                tempPath = await r2Storage.downloadToTemp(filePath)
+                return FileResponse(
+                    path=tempPath,
+                    filename=doc["filename"],
+                    media_type=mediaType,
+                    background=BackgroundTask(_removeTempFile, tempPath),
+                )
+            except Exception as e:
+                logger.error(f"serveDocumentFile R2 download failed for {filePath}: {e}")
+                raise HTTPException(status_code=404, detail="File not found in storage")
         if not os.path.exists(filePath):
             raise HTTPException(status_code=404, detail="File not found on disk")
-        mediaType = MIME_TYPES.get(doc.get("fileType", ""), "application/octet-stream")
         return FileResponse(
             path=filePath,
             filename=doc["filename"],
@@ -114,10 +136,13 @@ async def getDocumentOcrText(
         ocrFilePath = doc.get("ocrFilePath")
         if not ocrFilePath or doc.get("ocrStatus") != "completed":
             raise HTTPException(status_code=404, detail="OCR not available for this document")
-        if not os.path.exists(ocrFilePath):
-            raise HTTPException(status_code=404, detail="OCR file not found on disk")
-        with open(ocrFilePath, "r", encoding="utf-8") as f:
-            text = f.read()
+        if r2Storage.enabled and isR2Key(ocrFilePath):
+            text = await r2Storage.readText(ocrFilePath, maxChars=1000000)
+        else:
+            if not os.path.exists(ocrFilePath):
+                raise HTTPException(status_code=404, detail="OCR file not found on disk")
+            with open(ocrFilePath, "r", encoding="utf-8") as f:
+                text = f.read()
         return {
             "documentId": documentId,
             "text": text,
