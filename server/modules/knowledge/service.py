@@ -120,10 +120,19 @@ def _readTextContent(filePath: str, maxChars: int = SUMMARY_MAX_CHARS) -> str:
         return ""
 
 
+async def _readTextFromStorage(storageRef: str, maxChars: int = SUMMARY_MAX_CHARS) -> str:
+    if isR2Key(storageRef):
+        return await r2Storage.readText(storageRef, maxChars=maxChars)
+    return _readTextContent(storageRef, maxChars)
+
+
 class DocumentService:
 
     def __init__(self):
         self._processSem = asyncio.Semaphore(int(os.getenv("DOC_PROCESSING_CONCURRENCY", "4")))
+
+    async def _readTextFromStorage(self, storageRef: str, maxChars: int = SUMMARY_MAX_CHARS) -> str:
+        return await _readTextFromStorage(storageRef, maxChars)
 
     async def uploadDocuments(
         self,
@@ -294,7 +303,12 @@ class DocumentService:
                 )
                 total = time.perf_counter() - t0
                 logger.info(f"_processDocument completed documentId={documentId} total={total:.2f}s")
-                asyncio.create_task(self._generateSummary(documentId, workingPath, indexPath))
+                if isR2Key(filePath):
+                    asyncio.create_task(
+                        self._generateSummary(documentId, filePath, ocrKey if isScanned else filePath)
+                    )
+                else:
+                    asyncio.create_task(self._generateSummary(documentId, workingPath, indexPath))
             except Exception as e:
                 logger.error(f"_processDocument failed for {documentId}: {e}")
                 await documentRepository.updateEmbedding(
@@ -311,7 +325,7 @@ class DocumentService:
     async def _generateSummary(self, documentId: str, filePath: str, indexPath: str = None) -> None:
         try:
             await documentRepository.updateSummary(documentId, "processing")
-            text = _readTextContent(indexPath or filePath)
+            text = await _readTextFromStorage(indexPath or filePath)
             if not text.strip():
                 await documentRepository.updateSummary(documentId, "failed")
                 return
@@ -371,7 +385,7 @@ class DocumentService:
                 if not readPath:
                     logger.warning(f"getDocumentContext: no readPath for document {docId}")
                     continue
-                text = _readTextContent(readPath, maxChars=8000)
+                text = await _readTextFromStorage(readPath, maxChars=8000)
                 if text.strip():
                     parts.append(f"--- Document: {doc.get('filename', docId)} ---\n{text}")
             except Exception as e:
@@ -420,7 +434,7 @@ class DocumentService:
                     if not doc:
                         continue
                     readPath = doc.get("ocrFilePath") or doc["filePath"]
-                    text = _readTextContent(readPath, maxChars=8000)
+                    text = await _readTextFromStorage(readPath, maxChars=8000)
                     if text.strip():
                         parts.append(f"--- Document: {doc.get('filename', docId)} ---\n{text}")
                         sources.append({"filename": doc.get("filename"), "pageNumber": None, "documentId": docId})
@@ -441,7 +455,12 @@ class DocumentService:
         doc = await documentRepository.getById(documentId)
         if not doc or str(doc.get("userId")) != str(userId):
             raise ValueError("Document not found")
-        if not doc.get("filePath") or not os.path.exists(doc["filePath"]):
+        if not doc.get("filePath"):
+            raise ValueError("Source file no longer exists")
+        if isR2Key(doc["filePath"]):
+            if not await r2Storage.exists(doc["filePath"]):
+                raise ValueError("Source file no longer exists in storage")
+        elif not os.path.exists(doc["filePath"]):
             raise ValueError("Source file no longer exists on disk")
         embeddingStatus = doc.get("embeddingStatus")
         ocrStatus = doc.get("ocrStatus")
@@ -462,26 +481,38 @@ class DocumentService:
         return await documentRepository.getById(documentId)
 
     async def deleteDocument(self, userId: str, documentId: str) -> bool:
+        doc = await documentRepository.getById(documentId)
         result = await documentRepository.delete(documentId, userId)
         if result is None:
             return False
         filePath, ownerId = result
-        try:
-            if filePath and os.path.exists(filePath):
-                os.remove(filePath)
-        except Exception as e:
-            logger.error(f"deleteDocument file removal failed for {documentId}: {e}")
-        ocrPath = str(OCR_DIR / f"{documentId}_ocr.txt")
-        try:
-            if os.path.exists(ocrPath):
-                os.remove(ocrPath)
-        except Exception as e:
-            logger.error(f"deleteDocument OCR file removal failed for {documentId}: {e}")
+        ocrKey = (doc or {}).get("ocrFilePath")
+        if r2Storage.enabled and isR2Key(filePath):
+            try:
+                await r2Storage.delete(filePath)
+            except Exception as e:
+                logger.error(f"deleteDocument R2 file removal failed for {documentId}: {e}")
+            if ocrKey and isR2Key(ocrKey):
+                try:
+                    await r2Storage.delete(ocrKey)
+                except Exception as e:
+                    logger.error(f"deleteDocument R2 OCR removal failed for {documentId}: {e}")
+        else:
+            try:
+                if filePath and os.path.exists(filePath):
+                    os.remove(filePath)
+            except Exception as e:
+                logger.error(f"deleteDocument file removal failed for {documentId}: {e}")
+            ocrPath = str(OCR_DIR / f"{documentId}_ocr.txt")
+            try:
+                if os.path.exists(ocrPath):
+                    os.remove(ocrPath)
+            except Exception as e:
+                logger.error(f"deleteDocument OCR file removal failed for {documentId}: {e}")
         try:
             await ragService.deleteDocumentChunks(ownerId, documentId)
         except Exception as e:
             logger.error(f"deleteDocument RAG cleanup failed for {documentId}: {e}")
-        # doc-index is keyed by userId (uploader), not ownerId (project/user namespace)
         try:
             await ragService.deleteDocumentIndex(userId, documentId)
         except Exception as e:

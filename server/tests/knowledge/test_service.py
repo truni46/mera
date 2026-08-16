@@ -179,3 +179,90 @@ def _writeTempPdf():
     with os.fdopen(fd, "wb") as f:
         f.write(b"%PDF-1.7 fake")
     return path
+
+
+def test__readTextFromStorage_r2_uses_readText(monkeypatch):
+    import asyncio
+    from unittest.mock import AsyncMock, patch
+    from modules.knowledge.service import documentService
+    monkeypatch.setattr(
+        "modules.knowledge.service.r2Storage.readText",
+        AsyncMock(return_value="r2 md content"),
+    )
+    text = asyncio.get_event_loop().run_until_complete(
+        documentService._readTextFromStorage("ocr/doc1.md", 100)
+    )
+    assert text == "r2 md content"
+
+
+def test__readTextFromStorage_local_uses_file(monkeypatch, tmp_path):
+    import asyncio
+    from unittest.mock import patch
+    from modules.knowledge.service import documentService
+    p = tmp_path / "local.txt"
+    p.write_text("local content", encoding="utf-8")
+    with patch("modules.knowledge.service._readTextContent", return_value="local content") as mockRead:
+        text = asyncio.get_event_loop().run_until_complete(
+            documentService._readTextFromStorage(str(p), 100)
+        )
+    assert text == "local content"
+    mockRead.assert_called_once_with(str(p), 100)
+
+
+def test_retryDocument_r2_uses_exists():
+    import asyncio
+    from unittest.mock import AsyncMock, patch
+    from modules.knowledge.service import documentService
+
+    doc = {
+        "id": "doc1",
+        "userId": "user1",
+        "ownerId": "user1",
+        "filePath": "documents/doc1/a.pdf",
+        "filename": "a.pdf",
+        "embeddingStatus": "failed",
+        "ocrStatus": None,
+    }
+
+    class FakeTask:
+        def __init__(self, coro):
+            self._coro = coro
+
+    with patch("modules.knowledge.service.documentRepository.getById", new=AsyncMock(return_value=doc)), \
+         patch("modules.knowledge.service.r2Storage.exists", new=AsyncMock(return_value=True)) as mockExists, \
+         patch("modules.knowledge.service.documentRepository.updateEmbedding", new=AsyncMock()), \
+         patch("modules.knowledge.service.documentService._processDocument", new=AsyncMock()), \
+         patch("modules.knowledge.service.asyncio.create_task", lambda coro, **kw: FakeTask(coro)):
+        asyncio.get_event_loop().run_until_complete(
+            documentService.retryDocument("doc1", "user1")
+        )
+    mockExists.assert_awaited_once_with("documents/doc1/a.pdf")
+
+
+def test_deleteDocument_r2_deletes_both_keys():
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from modules.knowledge.service import documentService
+
+    deleted = []
+    async def fakeDelete(key):
+        deleted.append(key)
+
+    mockR2 = MagicMock()
+    mockR2.enabled = True
+    mockR2.delete.side_effect = fakeDelete
+
+    with patch("modules.knowledge.service.r2Storage", mockR2), \
+         patch("modules.knowledge.service.documentRepository.delete", new=AsyncMock(return_value=("documents/doc1/a.pdf", "user1"))), \
+         patch("modules.knowledge.service.documentRepository.getById", new=AsyncMock(return_value={
+             "id": "doc1",
+             "userId": "user1",
+             "ocrFilePath": "ocr/doc1.md",
+         })), \
+         patch("modules.knowledge.service.ragService.deleteDocumentChunks", new=AsyncMock()), \
+         patch("modules.knowledge.service.ragService.deleteDocumentIndex", new=AsyncMock()):
+        result = asyncio.get_event_loop().run_until_complete(
+            documentService.deleteDocument("user1", "doc1")
+        )
+    assert result is True
+    assert set(deleted) == {"documents/doc1/a.pdf", "ocr/doc1.md"}
