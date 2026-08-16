@@ -122,6 +122,9 @@ def _readTextContent(filePath: str, maxChars: int = SUMMARY_MAX_CHARS) -> str:
 
 class DocumentService:
 
+    def __init__(self):
+        self._processSem = asyncio.Semaphore(int(os.getenv("DOC_PROCESSING_CONCURRENCY", "4")))
+
     async def uploadDocuments(
         self,
         userId: str,
@@ -213,58 +216,97 @@ class DocumentService:
     async def _processDocument(
         self, documentId: str, filePath: str, ownerId: str, userId: str, filename: Optional[str] = None
     ) -> None:
-        try:
-            t0 = time.perf_counter()
-            logger.info(f"_processDocument start documentId={documentId} file={filePath}")
-            await documentRepository.updateEmbedding(documentId, "processing")
+        async with self._processSem:
+            import tempfile
+            tempToClean: List[str] = []
+            try:
+                workingPath = filePath
+                if isR2Key(filePath):
+                    workingPath = await r2Storage.downloadToTemp(filePath)
+                    tempToClean.append(workingPath)
 
-            ext = os.path.splitext(filePath)[1].lower()
-            if ext == ".doc":
-                tConvert = time.perf_counter()
-                logger.info(f"_processDocument converting .doc to .docx documentId={documentId}")
-                docxPath = _convertDocToDocx(filePath)
-                if docxPath:
-                    filePath = docxPath
-                    await documentRepository.updateFilePath(documentId, filePath, "docx")
-                    logger.info(f"_processDocument .doc conversion done elapsed={time.perf_counter()-tConvert:.2f}s documentId={documentId}")
+                t0 = time.perf_counter()
+                logger.info(f"_processDocument start documentId={documentId} file={workingPath}")
+                await documentRepository.updateEmbedding(documentId, "processing")
 
-            indexPath = filePath
-            tOcrCheck = time.perf_counter()
-            isScanned = needsOcr(filePath)
-            logger.info(f"_processDocument needsOcr={isScanned} elapsed={time.perf_counter()-tOcrCheck:.2f}s documentId={documentId}")
+                ext = os.path.splitext(workingPath)[1].lower()
+                if ext == ".doc":
+                    tConvert = time.perf_counter()
+                    logger.info(f"_processDocument converting .doc to .docx documentId={documentId}")
+                    docxPath = _convertDocToDocx(workingPath)
+                    if docxPath:
+                        tempToClean.append(docxPath)
+                        if isR2Key(filePath):
+                            docxKey = f"documents/{documentId}/{os.path.basename(docxPath)}"
+                            with open(docxPath, "rb") as f:
+                                docxContent = f.read()
+                            await r2Storage.uploadBytes(
+                                docxContent,
+                                docxKey,
+                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            )
+                            await documentRepository.updateFilePath(documentId, docxKey, "docx")
+                        else:
+                            await documentRepository.updateFilePath(documentId, docxPath, "docx")
+                        workingPath = docxPath
+                        logger.info(f"_processDocument .doc conversion done elapsed={time.perf_counter()-tConvert:.2f}s documentId={documentId}")
 
-            if isScanned:
-                try:
-                    await documentRepository.updateOcr(documentId, "processing", isScanned=True)
-                    tOcr = time.perf_counter()
-                    logger.info(f"_processDocument OCR start documentId={documentId} provider={ocrService.providerName}")
-                    ocrPages = ocrService.ocrFile(filePath)
-                    logger.info(f"_processDocument OCR done pages={len(ocrPages)} elapsed={time.perf_counter()-tOcr:.2f}s documentId={documentId}")
-                    ocrFilePath = str(OCR_DIR / f"{documentId}_ocr.txt")
-                    ocrService.saveOcrText(ocrPages, ocrFilePath)
-                    await documentRepository.updateOcr(documentId, "completed", ocrFilePath=ocrFilePath)
-                    indexPath = ocrFilePath
-                except Exception as e:
-                    logger.error(f"OCR failed for {documentId}: {e}")
-                    await documentRepository.updateOcr(documentId, "failed")
+                indexPath = workingPath
+                tOcrCheck = time.perf_counter()
+                isScanned = needsOcr(workingPath)
+                logger.info(f"_processDocument needsOcr={isScanned} elapsed={time.perf_counter()-tOcrCheck:.2f}s documentId={documentId}")
 
-            tIndex = time.perf_counter()
-            logger.info(f"_processDocument indexing start documentId={documentId} indexPath={indexPath}")
-            chunkCount = await ragService.index(indexPath, ownerId, documentId, userId, filename=filename)
-            logger.info(f"_processDocument indexing done chunkCount={chunkCount} elapsed={time.perf_counter()-tIndex:.2f}s documentId={documentId}")
+                if isScanned:
+                    try:
+                        await documentRepository.updateOcr(documentId, "processing", isScanned=True)
+                        tOcr = time.perf_counter()
+                        logger.info(f"_processDocument OCR start documentId={documentId} provider={ocrService.providerName}")
+                        ocrPages = ocrService.ocrFile(workingPath)
+                        logger.info(f"_processDocument OCR done pages={len(ocrPages)} elapsed={time.perf_counter()-tOcr:.2f}s documentId={documentId}")
+                        if isR2Key(filePath):
+                            fdRaw, mdPath = tempfile.mkstemp(prefix=f"{documentId}_ocr_", suffix=".md")
+                            os.close(fdRaw)
+                            tempToClean.append(mdPath)
+                            ocrService.saveOcrMarkdown(ocrPages, mdPath)
+                            with open(mdPath, "rb") as f:
+                                mdBytes = f.read()
+                            ocrKey = f"ocr/{documentId}.md"
+                            await r2Storage.uploadBytes(mdBytes, ocrKey, "text/markdown")
+                            await documentRepository.updateOcr(documentId, "completed", ocrFilePath=ocrKey)
+                            indexPath = mdPath
+                        else:
+                            ocrFilePath = str(OCR_DIR / f"{documentId}_ocr.txt")
+                            ocrService.saveOcrText(ocrPages, ocrFilePath)
+                            await documentRepository.updateOcr(documentId, "completed", ocrFilePath=ocrFilePath)
+                            indexPath = ocrFilePath
+                    except Exception as e:
+                        logger.error(f"OCR failed for {documentId}: {e}")
+                        await documentRepository.updateOcr(documentId, "failed")
 
-            pageCount = _extractPageCount(filePath)
-            await documentRepository.updateEmbedding(
-                documentId, "completed", chunkCount=chunkCount, pageCount=pageCount
-            )
-            total = time.perf_counter() - t0
-            logger.info(f"_processDocument completed documentId={documentId} total={total:.2f}s")
-            asyncio.create_task(self._generateSummary(documentId, filePath, indexPath))
-        except Exception as e:
-            logger.error(f"_processDocument failed for {documentId}: {e}")
-            await documentRepository.updateEmbedding(
-                documentId, "failed", errorMsg="Embedding failed. Please retry."
-            )
+                tIndex = time.perf_counter()
+                logger.info(f"_processDocument indexing start documentId={documentId} indexPath={indexPath}")
+                chunkCount = await ragService.index(indexPath, ownerId, documentId, userId, filename=filename)
+                logger.info(f"_processDocument indexing done chunkCount={chunkCount} elapsed={time.perf_counter()-tIndex:.2f}s documentId={documentId}")
+
+                pageCount = _extractPageCount(workingPath)
+                await documentRepository.updateEmbedding(
+                    documentId, "completed", chunkCount=chunkCount, pageCount=pageCount
+                )
+                total = time.perf_counter() - t0
+                logger.info(f"_processDocument completed documentId={documentId} total={total:.2f}s")
+                asyncio.create_task(self._generateSummary(documentId, workingPath, indexPath))
+            except Exception as e:
+                logger.error(f"_processDocument failed for {documentId}: {e}")
+                await documentRepository.updateEmbedding(
+                    documentId, "failed", errorMsg="Embedding failed. Please retry."
+                )
+            finally:
+                for tmpPath in tempToClean:
+                    try:
+                        if tmpPath and os.path.exists(tmpPath):
+                            os.remove(tmpPath)
+                    except Exception as e:
+                        logger.warning(f"_processDocument temp cleanup failed for {tmpPath}: {e}")
 
     async def _generateSummary(self, documentId: str, filePath: str, indexPath: str = None) -> None:
         try:

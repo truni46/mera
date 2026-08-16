@@ -130,3 +130,52 @@ def test__uploadOne_uploads_to_r2_when_r2_enabled():
     assert uploadCalls[0][1] == "application/pdf"
     localCandidate = UPLOAD_DIR / result["filePath"].split("/")[-1]
     assert not localCandidate.exists(), "must not write to local disk when R2 enabled"
+
+
+def test__processDocument_r2_downloads_uploads_ocr_markdown(monkeypatch):
+    import asyncio
+    from unittest.mock import AsyncMock, patch
+    from modules.knowledge.service import documentService
+    from modules.ocr.ocrProvider import OcrPage
+
+    ocrUploads = {}
+
+    async def fakeUploadBytes(content, key, contentType):
+        ocrUploads[key] = content
+        return key
+
+    async def fakeDownloadToTemp(key):
+        return _writeTempPdf()
+
+    class FakeTask:
+        def __init__(self, coro):
+            self._coro = coro
+
+    monkeypatch.setattr("modules.knowledge.service.r2Storage.downloadToTemp", fakeDownloadToTemp)
+    monkeypatch.setattr("modules.knowledge.service.r2Storage.uploadBytes", fakeUploadBytes)
+    monkeypatch.setattr("modules.knowledge.service.asyncio.create_task", lambda coro, **kw: FakeTask(coro))
+
+    with patch("modules.knowledge.service.documentRepository.updateEmbedding", new=AsyncMock()), \
+         patch("modules.knowledge.service.documentRepository.updateOcr", new=AsyncMock()) as mockUpdateOcr, \
+         patch("modules.knowledge.service.documentRepository.updateFilePath", new=AsyncMock()), \
+         patch("modules.knowledge.service.ragService.index", new=AsyncMock(return_value=7)), \
+         patch("modules.knowledge.service.needsOcr", return_value=True), \
+         patch("modules.knowledge.service.ocrService.ocrFile", return_value=[OcrPage(text="scanned text", pageNumber=1)]), \
+         patch("modules.knowledge.service._extractPageCount", return_value=1):
+        asyncio.get_event_loop().run_until_complete(
+            documentService._processDocument("doc1", "documents/doc1/a.pdf", "user1", "user1", "a.pdf")
+        )
+
+    ocrKey = "ocr/doc1.md"
+    assert any(c.kwargs.get("ocrFilePath") == ocrKey for c in mockUpdateOcr.call_args_list)
+    assert ocrKey in ocrUploads
+    assert b"## Page 1" in ocrUploads[ocrKey]
+
+
+def _writeTempPdf():
+    import os
+    import tempfile
+    fd, path = tempfile.mkstemp(suffix=".pdf")
+    with os.fdopen(fd, "wb") as f:
+        f.write(b"%PDF-1.7 fake")
+    return path
