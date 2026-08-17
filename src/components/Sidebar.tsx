@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import ConversationList from './chat/ConversationList';
 import OverlayScrollArea from './OverlayScrollArea';
 import UserMenu from './UserMenu';
-import logo from '../assets/logo.png';
+import logo from '../assets/logo.svg';
 import type { ConversationSummary, User } from '../types';
 
 interface SidebarProps {
