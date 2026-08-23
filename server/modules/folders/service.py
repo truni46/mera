@@ -1,4 +1,5 @@
 # server/modules/folders/service.py
+import asyncio
 from typing import Dict, List, Optional
 
 from config.logger import logger
@@ -52,15 +53,24 @@ class FolderService:
         if not folder or str(folder.get("userId")) != str(userId):
             return False
         allIds = await folderRepository.getAllDescendants(folderId, userId)
-        deleted = 0
+
+        # Collect all documents across all descendant folders, then delete in parallel.
+        docIds = []
         for childId in allIds:
             docs = await documentService.getDocuments(userId=userId, parentId=childId)
-            for doc in docs:
-                try:
-                    if await documentService.deleteDocument(userId, doc["id"]):
-                        deleted += 1
-                except Exception as e:
-                    logger.error(f"deleteFolder failed deleting document {doc['id']}: {e}")
+            docIds.extend(str(doc["id"]) for doc in docs)
+
+        results = await asyncio.gather(
+            *(documentService.deleteDocument(userId, docId) for docId in docIds),
+            return_exceptions=True,
+        )
+        deleted = 0
+        for docId, res in zip(docIds, results):
+            if isinstance(res, Exception):
+                logger.error(f"deleteFolder failed deleting document {docId}: {res}")
+            elif res:
+                deleted += 1
+
         await folderRepository.deleteMany(allIds, userId)
         logger.info(f"deleteFolder folderId={folderId} userId={userId} folders={len(allIds)} documents={deleted}")
         return True

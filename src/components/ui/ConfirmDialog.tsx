@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { HiExclamationTriangle } from 'react-icons/hi2';
 
 interface ConfirmDialogProps {
@@ -45,13 +46,13 @@ export default function ConfirmDialog({
         ? 'bg-red-500 hover:bg-red-600 text-white'
         : 'bg-primary hover:bg-primary/90 text-white';
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onCancel} />
             <div
                 ref={dialogRef}
                 tabIndex={-1}
-                className="relative bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4 animate-toast-in outline-none"
+                className="relative bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4 animate-fade-in outline-none"
             >
                 <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
@@ -79,6 +80,7 @@ export default function ConfirmDialog({
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }

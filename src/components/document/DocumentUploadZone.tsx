@@ -38,9 +38,26 @@ function FileProgressItem({ item, onPause, onResume, onCancel }: FileProgressIte
     const isPaused = item.status === 'paused';
     const showControls = isActive || isPaused;
     const currentProgress = item.phase === 'index' ? 100 : item.progress;
+    const isFinishing = item.status === 'done' || item.status === 'error';
+    const [entered, setEntered] = useState(false);
+
+    useEffect(() => {
+        const raf = requestAnimationFrame(() => setEntered(true));
+        return () => cancelAnimationFrame(raf);
+    }, []);
+
+    const show = entered && !isFinishing;
 
     return (
-        <div className="space-y-1">
+        <div
+            className="grid transition-all duration-500 ease-in-out overflow-hidden"
+            style={{ gridTemplateRows: show ? '1fr' : '0fr' }}
+        >
+            <div
+                className="min-h-0 overflow-hidden transition-all duration-500 ease-in-out"
+                style={{ opacity: show ? 1 : 0, transform: show ? 'translateY(0)' : 'translateY(-12px)' }}
+            >
+            <div className="space-y-1">
             <div className="flex items-center justify-between text-xs">
                 <span className="truncate max-w-xs text-text-secondary" title={item.file.name}>
                     {item.file.name}
@@ -102,7 +119,7 @@ function FileProgressItem({ item, onPause, onResume, onCancel }: FileProgressIte
                     )}
                 </div>
             </div>
-            <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+<div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
                 <div
                     className={`h-full rounded-full transition-all duration-300 ${item.status === 'error'
                         ? 'bg-red-400'
@@ -110,6 +127,8 @@ function FileProgressItem({ item, onPause, onResume, onCancel }: FileProgressIte
                         }`}
                     style={{ width: `${currentProgress}%` }}
                 />
+            </div>
+            </div>
             </div>
         </div>
     );
@@ -196,6 +215,7 @@ export default function DocumentUploadZone({ onUploadComplete, folderId = null }
                             status: 'error',
                             errorMessage: doc.embeddingError || 'Indexing failed',
                         });
+                        setTimeout(() => removeItem(itemId), 800);
                         break;
                     }
                 }
@@ -205,6 +225,7 @@ export default function DocumentUploadZone({ onUploadComplete, folderId = null }
                         status: 'error',
                         errorMessage: err instanceof Error ? err.message : 'Polling failed',
                     });
+                    setTimeout(() => removeItem(itemId), 800);
                 }
             } finally {
                 delete abortFlagsRef.current[itemId];
@@ -256,10 +277,11 @@ export default function DocumentUploadZone({ onUploadComplete, folderId = null }
                         status: 'error',
                         errorMessage: err instanceof Error ? err.message : 'Upload failed',
                     });
+                    setTimeout(() => removeItem(item.id), 800);
                 }
             }
         },
-        [updateItem, pollIndexingStatus, onUploadComplete],
+        [updateItem, pollIndexingStatus, onUploadComplete, removeItem],
     );
 
     const handleResume = useCallback((id: string) => {
@@ -315,7 +337,7 @@ export default function DocumentUploadZone({ onUploadComplete, folderId = null }
     );
 
     return (
-        <div className="bg-white rounded-xl border border-border-color p-6 space-y-4">
+        <div className="bg-white rounded-xl border border-border-color px-6 py-6 space-y-3">
             <label
                 htmlFor={inputId}
                 onDragOver={e => {
@@ -326,7 +348,7 @@ export default function DocumentUploadZone({ onUploadComplete, folderId = null }
                 onDrop={onDrop}
                 className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center gap-3 cursor-pointer transition-colors ${dragOver
                     ? 'border-primary bg-primary/5'
-                    : 'border-gray-300 hover:border-primary/50'
+                    : 'border-gray-300 hover:border-gray-400'
                     }`}
             >
                 <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">

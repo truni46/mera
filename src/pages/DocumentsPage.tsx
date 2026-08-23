@@ -25,9 +25,16 @@ export default function DocumentsPage() {
         setRefreshTrigger(t => t + 1);
     }, []);
 
+    const handleGoBack = useCallback(() => {
+        if (crumbs.length <= 1) return;
+        const newCrumbs = crumbs.slice(0, -1);
+        setCrumbs(newCrumbs);
+        setRefreshTrigger(t => t + 1);
+    }, [crumbs]);
+
     return (
         <div className="flex-1 flex flex-col h-full overflow-hidden p-3">
-            <div className="flex flex-col flex-1 bg-app-bg rounded-2xl overflow-hidden">
+            <div className="flex flex-col flex-1 bg-app-bg overflow-hidden">
                 <main className="flex-1 overflow-y-auto p-8">
                     <div className="max-w-5xl mx-auto space-y-8">
                         <Breadcrumb items={crumbs} onNavigate={handleBreadcrumbNavigate} />
@@ -39,6 +46,7 @@ export default function DocumentsPage() {
                             refreshTrigger={refreshTrigger}
                             folderId={currentFolderId}
                             onNavigateFolder={handleNavigateFolder}
+                            onGoBack={handleGoBack}
                         />
                     </div>
                 </main>

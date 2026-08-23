@@ -516,14 +516,24 @@ class DocumentService:
                     os.remove(ocrPath)
             except Exception as e:
                 logger.error(f"deleteDocument OCR file removal failed for {documentId}: {e}")
-        try:
-            await ragService.deleteDocumentChunks(ownerId, documentId)
-        except Exception as e:
-            logger.error(f"deleteDocument RAG cleanup failed for {documentId}: {e}")
-        try:
-            await ragService.deleteDocumentIndex(userId, documentId)
-        except Exception as e:
-            logger.error(f"deleteDocument doc-index cleanup failed for {documentId}: {e}")
+        # Only clean up Qdrant if the document was actually indexed.
+        # Never-indexed docs (pending/failed) have no chunks, so skipping avoids
+        # blocking network calls when Qdrant is unreachable.
+        embeddingStatus = (doc or {}).get("embeddingStatus")
+        if embeddingStatus == "completed":
+            async def _cleanChunks():
+                try:
+                    await ragService.deleteDocumentChunks(ownerId, documentId)
+                except Exception as e:
+                    logger.error(f"deleteDocument RAG cleanup failed for {documentId}: {e}")
+
+            async def _cleanIndex():
+                try:
+                    await ragService.deleteDocumentIndex(userId, documentId)
+                except Exception as e:
+                    logger.error(f"deleteDocument doc-index cleanup failed for {documentId}: {e}")
+
+            await asyncio.gather(_cleanChunks(), _cleanIndex())
         return True
 
 

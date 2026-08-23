@@ -6,9 +6,10 @@ interface CheckboxProps {
     onClick?: (e: MouseEvent<HTMLLabelElement>) => void;
     indeterminate?: boolean;
     variant?: 'default' | 'header';
+    uncheckedBgClassName?: string;
 }
 
-export default function Checkbox({ checked, onChange, onClick, indeterminate = false, variant = 'default' }: CheckboxProps) {
+export default function Checkbox({ checked, onChange, onClick, indeterminate = false, variant = 'default', uncheckedBgClassName }: CheckboxProps) {
     const isHeader = variant === 'header';
 
     const boxClass = indeterminate
@@ -17,7 +18,7 @@ export default function Checkbox({ checked, onChange, onClick, indeterminate = f
             ? isHeader
                 ? 'bg-white border-primary'
                 : 'bg-primary border-primary'
-            : 'bg-white border-gray-400 hover:border-gray-600';
+            : uncheckedBgClassName ?? 'bg-white border-gray-400 hover:border-gray-600';
 
     return (
         <label className="relative inline-flex items-center cursor-pointer" onClick={onClick}>

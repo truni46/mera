@@ -13,6 +13,7 @@ export default {
                 'page': '#ffffff',           // White background
                 'app-bg': '#f3f3f3',         // Gray app background behind floating cards
                 'sidebar': '#ffffff',        // White sidebar
+                'bg-white': '#fafafa',          // White background
                 'bg-tertiary': '#f3f4f6',    // Slightly darker gray
                 'text-primary': '#111827',   // Dark gray text
                 'text-secondary': '#6b7280', // Medium gray text

@@ -20,6 +20,11 @@ These reduce common LLM coding mistakes. They bias toward caution over speed; fo
 - If a simpler approach exists, say so. Push back when warranted.
 - If something is unclear, stop. Name what's confusing. Ask.
 
+### 5. Never Read or Expose Secrets
+- **Tuyệt đối không được đọc hoặc in ra các thông tin nhạy cảm** — ví dụ giá trị thật trong `.env`, `.env.local`, `.env.production`, credentials R2/DB/LLM/OCR, token, secret key, JWT, password, API key.
+- Khi gỡ lỗi/config liên quan đến biến môi trường, **chỉ đọc tên biến và trạng thái có/không có giá trị** (ví dụ `print(os.getenv('R2_ENABLED'))`), không in giá trị thật của secret (không in `os.getenv('R2_ACCESS_KEY_ID')`), không log token/password dưới bất kỳ dạng nào.
+- Không commit secret vào repository. Không đưa giá trị nhạy cảm vào commit message, comment, hay output trả về người dùng.
+
 ### 2. Simplicity First
 - Minimum code that solves the problem. Nothing speculative.
 - No features beyond what was asked.

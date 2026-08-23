@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { FiSearch, FiTrash2, FiPlus, FiEdit2 } from 'react-icons/fi';
+import { FiSearch, FiTrash2, FiPlus, FiEdit2, FiArrowLeft, FiDownload } from 'react-icons/fi';
 import DocumentCard from './DocumentCard';
 import FolderCard from './FolderCard';
 import DocumentDetailModal from './DocumentDetailModal';
 import OcrViewerModal from './OcrViewerModal';
 import ConfirmDialog from '../ui/ConfirmDialog';
-import Table from '../ui/Table';
+import Table, { TableCell } from '../ui/Table';
 import Checkbox from '../ui/Checkbox';
 import documentService from '../../services/documentService';
 import folderService from '../../services/folderService';
+import apiService from '../../services/apiService';
 import type { DocumentItem } from '../../types';
 import type { Folder } from '../../types/folder';
 import gradientSpinner from '../../assets/svg/gradientSpinner.svg';
@@ -30,12 +31,13 @@ interface DocumentTableProps {
     refreshTrigger: number;
     folderId: string | null;
     onNavigateFolder: (folderId: string, name: string) => void;
+    onGoBack?: () => void;
 }
 
 type FolderDeleteTarget = { id: string; name: string } | null;
 type RenameTarget = { id: string; name: string } | null;
 
-export default function DocumentTable({ refreshTrigger, folderId, onNavigateFolder }: DocumentTableProps) {
+export default function DocumentTable({ refreshTrigger, folderId, onNavigateFolder, onGoBack }: DocumentTableProps) {
     const [folders, setFolders] = useState<Folder[]>([]);
     const [documents, setDocuments] = useState<DocumentItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -168,6 +170,18 @@ export default function DocumentTable({ refreshTrigger, folderId, onNavigateFold
         setDeleteTarget({ bulk: true, ids: [...selectedIds], count: selectedIds.size });
     }, [selectedIds]);
 
+    const handleBulkDownload = useCallback(() => {
+        if (selectedIds.size === 0) return;
+        const ids = [...selectedIds];
+        ids.forEach(id => {
+            const doc = documents.find(d => d.id === id);
+            apiService.download(
+                `/knowledge/documents/${id}/file`,
+                doc?.filename || 'document',
+            );
+        });
+    }, [selectedIds, documents]);
+
     const handleDeleteConfirm = useCallback(async () => {
         if (!deleteTarget) return;
         try {
@@ -289,45 +303,74 @@ export default function DocumentTable({ refreshTrigger, folderId, onNavigateFold
     return (
         <>
             <div className="flex items-center justify-between mb-3">
-                <div className="relative group">
-                    <FiSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted transition-colors group-focus-within:text-gray-600" />
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        placeholder="Search documents..."
-                        className="pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:bg-white focus:outline-none focus:border-gray-600 transition-colors w-64"
-                    />
-                </div>
                 <div className="flex items-center gap-2">
+                    {folderId && onGoBack ? (
+                        <button
+                            onClick={onGoBack}
+                            className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-bg-secondary transition-colors"
+                            title="Go back"
+                        >
+                            <FiArrowLeft size={12} className="text-text-secondary" />
+                        </button>
+                    ) : (
+                        <div aria-hidden className="w-9 h-9" />
+                    )}
                     {!loading && filteredDocs.length > 0 && (
-                        <div className="flex items-center gap-2">
-                            <Checkbox
-                                checked={allSelected}
-                                indeterminate={someSelected}
-                                onChange={toggleSelectAll}
-                            />
-                            {hasSelection && (
-                                <span className="text-sm text-text-secondary">({selectedIds.size})</span>
-                            )}
+                        <div className="flex items-center h-9 border border-gray-300 bg-white rounded-lg overflow-hidden">
+                            <label className="flex items-center gap-2 px-3 h-full cursor-pointer select-none">
+                                <Checkbox
+                                    checked={allSelected}
+                                    indeterminate={someSelected}
+                                    onChange={toggleSelectAll}
+                                    uncheckedBgClassName="bg-white border-gray-400 hover:border-gray-600"
+                                />
+                                {hasSelection && (
+                                    <span className="text-sm text-text-secondary whitespace-nowrap">{selectedIds.size}</span>
+                                )}
+                            </label>
+                            <div className="w-px bg-gray-300 self-stretch" />
+                            <button
+                                onClick={handleBulkDownload}
+                                disabled={!hasSelection}
+                                className={`w-9 h-full px-2.5 flex items-center justify-center transition-colors ${hasSelection
+                                    ? 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+                                    : 'text-gray-400 cursor-not-allowed'
+                                    }`}
+                                title={hasSelection ? `Download ${selectedIds.size} selected` : 'Select items to download'}
+                            >
+                                <FiDownload size={12} />
+                            </button>
+                            <div className="w-px bg-gray-300 self-stretch" />
                             <button
                                 onClick={handleBulkDeleteRequest}
                                 disabled={!hasSelection || bulkDeleting}
-                                className={`p-1.5 rounded-md transition-colors ${hasSelection
-                                    ? 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                                    : 'text-gray-300 cursor-not-allowed'
+                                className={`w-9 h-full px-2.5 flex items-center justify-center transition-colors ${hasSelection
+                                    ? 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+                                    : 'text-gray-400 cursor-not-allowed'
                                     }`}
                                 title={hasSelection ? `Delete ${selectedIds.size} selected` : 'Select items to delete'}
                             >
-                                <FiTrash2 size={16} />
+                                <FiTrash2 size={12} />
                             </button>
                         </div>
                     )}
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="relative group">
+                        <FiSearch size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted transition-colors group-focus-within:text-gray-600" />
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                            placeholder="Search documents..."
+                            className="pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-gray-600 transition-colors w-64"
+                        />
+                    </div>
                     <button
                         onClick={handleCreateFolderStart}
                         className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
                     >
-                        <FiPlus size={15} />
+                        <FiPlus size={12} />
                         New
                     </button>
                 </div>
@@ -345,88 +388,74 @@ export default function DocumentTable({ refreshTrigger, folderId, onNavigateFold
                         </div>
                         <p className="text-sm text-text-secondary">Loading documents...</p>
                     </div>
-                ) : combinedItems.length === 0 ? (
+                ) : combinedItems.length === 0 && !creatingFolder ? (
                     <div className="p-12 text-center text-sm text-text-secondary">
                         {searchQuery ? 'No items match your search.' : 'No folders or documents here yet.'}
                     </div>
                 ) : (
                     <>
-                        <Table headers={['', 'Name', 'Status', 'Uploaded', 'Actions']}>
+                        <Table headers={['', 'Name', 'Status', 'Uploaded', '']}>
                             {creatingFolder && (
-                                <tr className="bg-primary-light/40">
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="flex items-center justify-center">
-                                            <FiPlus size={16} className="text-primary" />
+                                <tr className="bg-gray-50">
+                                    <TableCell colSpan={5}>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                ref={newFolderInputRef}
+                                                type="text"
+                                                value={folderName}
+                                                onChange={e => setFolderName(e.target.value)}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') handleCreateFolderSubmit();
+                                                    if (e.key === 'Escape') handleCreateFolderCancel();
+                                                }}
+                                                placeholder="Folder name"
+                                                className="ml-10 w-[calc((100%-8.5rem)/3)] px-3 py-1.5 text-sm border border-primary rounded-md focus:outline-none shrink-0"
+                                            />
+                                            <button
+                                                onClick={handleCreateFolderSubmit}
+                                                className="ml-auto px-3 py-1.5 text-sm text-white bg-primary rounded-lg hover:bg-primary-dark transition-colors"
+                                            >
+                                                Create
+                                            </button>
+                                            <button
+                                                onClick={handleCreateFolderCancel}
+                                                className="px-3 py-1.5 text-sm text-text-secondary hover:bg-gray-100 rounded-lg transition-colors"
+                                            >
+                                                Cancel
+                                            </button>
                                         </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <input
-                                            ref={newFolderInputRef}
-                                            type="text"
-                                            value={folderName}
-                                            onChange={e => setFolderName(e.target.value)}
-                                            onKeyDown={e => {
-                                                if (e.key === 'Enter') handleCreateFolderSubmit();
-                                                if (e.key === 'Escape') handleCreateFolderCancel();
-                                            }}
-                                            placeholder="Folder name"
-                                            className="w-full max-w-sm px-3 py-1.5 text-sm border border-primary rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
-                                        />
-                                    </td>
-                                    <td className="px-6 py-4" />
-                                    <td className="px-6 py-4" />
-                                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                                        <button
-                                            onClick={handleCreateFolderSubmit}
-                                            className="px-3 py-1.5 text-sm text-white bg-primary rounded-lg hover:bg-primary-dark transition-colors mr-2"
-                                        >
-                                            Create
-                                        </button>
-                                        <button
-                                            onClick={handleCreateFolderCancel}
-                                            className="px-3 py-1.5 text-sm text-text-secondary hover:bg-gray-100 rounded-lg transition-colors"
-                                        >
-                                            Cancel
-                                        </button>
-                                    </td>
+                                    </TableCell>
                                 </tr>
                             )}
-                            {renameTarget && (
-                                <tr className="bg-primary-light/40">
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="flex items-center justify-center">
-                                            <FiEdit2 size={16} className="text-primary" />
+                            {renameTarget && paginatedItems.filter(i => i.id === renameTarget.id).length === 0 && (
+                                <tr className="bg-gray-50">
+                                    <TableCell colSpan={5}>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                ref={newFolderInputRef}
+                                                type="text"
+                                                value={renameValue}
+                                                onChange={e => setRenameValue(e.target.value)}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') handleRenameSubmit();
+                                                    if (e.key === 'Escape') setRenameTarget(null);
+                                                }}
+                                                className="ml-3 w-[calc((100%-8.5rem)/3)] px-3 py-1.5 text-sm border border-primary rounded-lg focus:outline-none shrink-0"
+                                            />
+                                            <button
+                                                onClick={handleRenameSubmit}
+                                                className="ml-auto px-3 py-1.5 text-sm text-white bg-primary rounded-lg hover:bg-primary-dark transition-colors"
+                                            >
+                                                Save
+                                            </button>
+                                            <button
+                                                onClick={() => setRenameTarget(null)}
+                                                className="px-3 py-1.5 text-sm text-text-secondary  hover:bg-gray-200 rounded-lg transition-colors"
+                                            >
+                                                Cancel
+                                            </button>
                                         </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <input
-                                            ref={newFolderInputRef}
-                                            type="text"
-                                            value={renameValue}
-                                            onChange={e => setRenameValue(e.target.value)}
-                                            onKeyDown={e => {
-                                                if (e.key === 'Enter') handleRenameSubmit();
-                                                if (e.key === 'Escape') setRenameTarget(null);
-                                            }}
-                                            className="w-full max-w-sm px-3 py-1.5 text-sm border border-primary rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
-                                        />
-                                    </td>
-                                    <td className="px-6 py-4" />
-                                    <td className="px-6 py-4" />
-                                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                                        <button
-                                            onClick={handleRenameSubmit}
-                                            className="px-3 py-1.5 text-sm text-white bg-primary rounded-lg hover:bg-primary-dark transition-colors mr-2"
-                                        >
-                                            Save
-                                        </button>
-                                        <button
-                                            onClick={() => setRenameTarget(null)}
-                                            className="px-3 py-1.5 text-sm text-text-secondary hover:bg-gray-100 rounded-lg transition-colors"
-                                        >
-                                            Cancel
-                                        </button>
-                                    </td>
+                                    </TableCell>
                                 </tr>
                             )}
                             {paginatedItems.map(item => {
@@ -443,7 +472,37 @@ export default function DocumentTable({ refreshTrigger, folderId, onNavigateFold
                                         />
                                     );
                                 }
-                                return (
+                                return renameTarget?.id === item.id ? (
+                                    <tr key={item.id} className="bg-gray-50">
+                                        <TableCell colSpan={5}>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    ref={newFolderInputRef}
+                                                    type="text"
+                                                    value={renameValue}
+                                                    onChange={e => setRenameValue(e.target.value)}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter') handleRenameSubmit();
+                                                        if (e.key === 'Escape') setRenameTarget(null);
+                                                    }}
+                                                    className="ml-3 w-[calc((100%-8.5rem)/3)] px-3 py-1.5 text-sm border border-primary rounded-lg focus:outline-none shrink-0"
+                                                />
+                                                <button
+                                                    onClick={handleRenameSubmit}
+                                                    className="ml-auto px-3 py-1.5 text-sm text-white bg-primary rounded-lg hover:bg-primary-dark transition-colors"
+                                                >
+                                                    Save
+                                                </button>
+                                                <button
+                                                    onClick={() => setRenameTarget(null)}
+                                                    className="px-3 py-1.5 text-sm text-text-secondary  hover:bg-gray-200 rounded-lg transition-colors"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </TableCell>
+                                    </tr>
+                                ) : (
                                     <FolderCard
                                         key={item.id}
                                         folder={item}

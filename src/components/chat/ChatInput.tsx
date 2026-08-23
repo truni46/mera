@@ -277,7 +277,7 @@ export default function ChatInput({
                             </div>
                         )}
 
-                        <div className="flex items-center justify-center space-x-2 p-2">
+                        <div className="flex items-end justify-center space-x-2 p-2">
                             <div className="flex items-center gap-0.5 flex-shrink-0">
                                 <button
                                     onClick={() => setShowDocPicker(true)}

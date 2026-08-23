@@ -1,9 +1,8 @@
-import { useState } from 'react';
-import { FiTrash2, FiAlignLeft } from 'react-icons/fi';
-import { HiTrash } from 'react-icons/hi2';
+import { FiAlignLeft, FiTrash2 } from 'react-icons/fi';
 import DocumentStatusBadge from './DocumentStatusBadge';
 import { TableRow, TableCell } from '../ui/Table';
 import Checkbox from '../ui/Checkbox';
+import KebabMenu from '../ui/KebabMenu';
 import type { DocumentItem } from '../../types';
 
 interface DocumentCardProps {
@@ -16,14 +15,13 @@ interface DocumentCardProps {
 }
 
 export default function DocumentCard({ document, selected, onToggleSelect, onView, onDelete, onViewOcr }: DocumentCardProps) {
-    const [hovered, setHovered] = useState(false);
-    const date = new Date(document.createdAt).toLocaleDateString('en-GB', {
-        day: '2-digit', month: 'short', year: 'numeric',
+    const date = new Date(document.createdAt).toLocaleDateString('en-US', {
+        month: '2-digit', day: '2-digit', year: 'numeric',
     });
 
     return (
         <TableRow onClick={() => onView(document)}>
-            <TableCell>
+            <TableCell compact>
                 <div className="flex items-center justify-center">
                     <Checkbox
                         checked={!!selected}
@@ -45,33 +43,30 @@ export default function DocumentCard({ document, selected, onToggleSelect, onVie
             <TableCell>
                 <DocumentStatusBadge status={document.embeddingStatus} />
             </TableCell>
-            <TableCell className="text-sm text-text-secondary">
+            <TableCell className="text-sm text-text-primary">
                 {date}
             </TableCell>
-            <TableCell isLast>
-                <div className="flex items-center justify-end gap-0.5">
-                    {document.isScanned && document.ocrStatus === 'completed' && (
-                        <button
-                            onClick={e => { e.stopPropagation(); onViewOcr(document); }}
-                            className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
-                            title="View OCR result"
-                        >
-                            <FiAlignLeft size={15} />
-                        </button>
-                    )}
-                    <button
-                        onClick={e => { e.stopPropagation(); onDelete(document.id); }}
-                        onMouseEnter={() => setHovered(true)}
-                        onMouseLeave={() => setHovered(false)}
-                        className="p-2 transition-colors rounded"
-                        title="Delete"
-                    >
-                        {hovered
-                            ? <HiTrash size={16} className="text-red-700" />
-                            : <FiTrash2 size={16} className="text-gray-400" />
-                        }
-                    </button>
-                </div>
+            <TableCell isLast compact>
+                <KebabMenu
+                    title="Document actions"
+                    actions={[
+                        ...(document.isScanned && document.ocrStatus === 'completed'
+                            ? [{
+                                id: 'view-ocr',
+                                label: 'View OCR',
+                                icon: <FiAlignLeft size={15} />,
+                                onClick: () => onViewOcr(document),
+                            }]
+                            : []),
+                        {
+                            id: 'delete',
+                            label: 'Delete',
+                            icon: <FiTrash2 size={15} />,
+                            danger: true,
+                            onClick: () => onDelete(document.id),
+                        },
+                    ]}
+                />
             </TableCell>
         </TableRow>
     );

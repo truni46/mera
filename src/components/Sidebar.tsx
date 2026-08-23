@@ -30,7 +30,7 @@ export default function Sidebar({
     const isDocumentsPage = location.pathname === '/documents';
 
     return (
-        <div className={`${isExpanded ? 'w-64' : 'w-16'} bg-sidebar border border-gray-200 flex flex-col transition-all duration-300 m-2 rounded-2xl overflow-hidden`}>
+        <div className={`${isExpanded ? 'w-64' : 'w-16'} bg-sidebar border border-gray-200 flex flex-col transition-all duration-300 m-2 rounded-2xl overflow-hidden whitespace-nowrap`}>
             {/* Header */}
             <div className="p-3 flex items-center justify-between">
                 {isExpanded ? (
@@ -41,20 +41,25 @@ export default function Sidebar({
                         </div>
                         <button
                             onClick={() => setIsExpanded(false)}
-                            className="p-1.5 hover:bg-bg-tertiary rounded-lg transition-colors"
+                            className="p-2 hover:bg-bg-tertiary rounded-lg transition-colors"
+                            title="Collapse sidebar"
                         >
                             <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                                <rect x="3" y="3" width="18" height="18" rx="2" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v18" />
                             </svg>
                         </button>
                     </>
                 ) : (
                     <button
                         onClick={() => setIsExpanded(true)}
-                        className="w-full p-1.5 hover:bg-bg-tertiary rounded-lg transition-colors flex justify-center"
+                        className="group w-full p-2 hover:bg-bg-tertiary rounded-lg transition-colors flex justify-center"
+                        title="Expand sidebar"
                     >
-                        <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                        <img src={logo} alt="Logo" className="w-10 h-5 object-contain group-hover:hidden" />
+                        <svg className="w-5 h-5 p-0.5 text-text-secondary hidden group-hover:block self-center" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <rect x="3" y="3" width="18" height="18" rx="2" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 3v18" />
                         </svg>
                     </button>
                 )}

@@ -72,10 +72,16 @@ class SimpleRagProvider:
         self._url = os.getenv("QDRANT_URL", "http://localhost:6333")
         self._apiKey = os.getenv("QDRANT_API_KEY") or None
         self._client: Optional[AsyncQdrantClient] = None
+        self._timeout = float(os.getenv("QDRANT_TIMEOUT", "3"))
 
     async def _getClient(self) -> AsyncQdrantClient:
         if self._client is None:
-            self._client = AsyncQdrantClient(url=self._url, api_key=self._apiKey)
+            self._client = AsyncQdrantClient(
+                url=self._url,
+                api_key=self._apiKey,
+                timeout=self._timeout,
+                check_compatibility=False,
+            )
         return self._client
 
     def _collectionName(self, namespace: str) -> str:
