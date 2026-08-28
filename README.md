@@ -4,9 +4,17 @@ Mera is an advanced knowledge base mining project that enables intelligent Quest
 
 ## System Interface
 
-![Mera Q&A and Citations](docs/feature1.png)
-![Mera Document Digitization](docs/feature2.png)
-![Mera Agent Workflow](docs/feature3.png)
+<p align="center">
+  <img src="docs/feature1.png" width="900"/>
+</p>
+
+<p align="center">
+  <img src="docs/feature2.png" width="900"/>
+</p>
+
+<p align="center">
+  <img src="docs/feature3.png" width="900"/>
+</p>
 
 ## Key Features
 
